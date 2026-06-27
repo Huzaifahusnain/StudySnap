@@ -1,485 +1,612 @@
-const DB_KEY = "studysnap_users_v1";
-const SESSION_KEY = "studysnap_current_user";
-const THEME_KEY = "studysnap_theme";
+const SUPABASE_URL = "https://xesezkxicsttwyqkyox.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_jppNuFA8gcZZ3KLngcM5Eg_C74pKjU7";
 
-const authView = document.getElementById("authView");
-const appView = document.getElementById("appView");
-const toast = document.getElementById("toast");
+const isSupabaseReady =
+    SUPABASE_URL.startsWith("https://") &&
+    !SUPABASE_URL.includes("PASTE") &&
+    !SUPABASE_ANON_KEY.includes("PASTE");
 
-let state = {
+const supabaseClient = isSupabaseReady
+    ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+    : null;
+
+const state = {
     user: null,
+    profile: null,
+    notes: [],
+    flashcards: [],
+    activities: [],
+    latestNote: null,
     currentCardIndex: 0,
-    cardFlipped: false,
+    flipped: false,
+    quizActive: false,
     quizIndex: 0,
     quizScore: 0,
-    quizActive: false
+    selectedFile: null
 };
 
-function getUsers() {
-    return JSON.parse(localStorage.getItem(DB_KEY) || "[]");
-}
+const els = {
+    authScreen: document.getElementById("authScreen"),
+    appScreen: document.getElementById("appScreen"),
+    toast: document.getElementById("toast"),
 
-function saveUsers(users) {
-    localStorage.setItem(DB_KEY, JSON.stringify(users));
-}
+    loginForm: document.getElementById("loginForm"),
+    signupForm: document.getElementById("signupForm"),
 
-function saveCurrentUser(user) {
-    const users = getUsers();
-    const index = users.findIndex((item) => item.id === user.id);
+    welcomeTitle: document.getElementById("welcomeTitle"),
+    profileBtn: document.getElementById("profileBtn"),
+    profileName: document.getElementById("profileName"),
+    bigAvatar: document.getElementById("bigAvatar"),
 
-    if (index !== -1) {
-        users[index] = user;
-        saveUsers(users);
-    }
+    streakValue: document.getElementById("streakValue"),
+    xpValue: document.getElementById("xpValue"),
+    cardsValue: document.getElementById("cardsValue"),
+    trophyValue: document.getElementById("trophyValue"),
+    levelText: document.getElementById("levelText"),
+    levelFill: document.getElementById("levelFill"),
 
-    state.user = user;
-    renderAll();
-}
+    activityList: document.getElementById("activityList"),
+    activityCount: document.getElementById("activityCount"),
 
-function getCurrentUser() {
-    const id = localStorage.getItem(SESSION_KEY);
-    if (!id) return null;
+    fileInput: document.getElementById("fileInput"),
+    uploadTitle: document.getElementById("uploadTitle"),
+    uploadSub: document.getElementById("uploadSub"),
+    focusSelect: document.getElementById("focusSelect"),
+    generateBtn: document.getElementById("generateBtn"),
+    generateStatus: document.getElementById("generateStatus"),
+    notesOutput: document.getElementById("notesOutput"),
 
-    const users = getUsers();
-    return users.find((user) => user.id === id) || null;
-}
+    cardCountText: document.getElementById("cardCountText"),
+    flashLabel: document.getElementById("flashLabel"),
+    flashQuestion: document.getElementById("flashQuestion"),
+    flashAnswer: document.getElementById("flashAnswer"),
+    wrongBox: document.getElementById("wrongBox"),
 
-async function hashPassword(password) {
-    if (!window.crypto || !window.crypto.subtle) {
-        return `demo-${password}`;
-    }
+    quizTitle: document.getElementById("quizTitle"),
+    quizProgress: document.getElementById("quizProgress"),
+    quizQuestion: document.getElementById("quizQuestion"),
+    quizInput: document.getElementById("quizInput"),
+    quizFeedback: document.getElementById("quizFeedback"),
 
-    const data = new TextEncoder().encode(password);
-    const hash = await crypto.subtle.digest("SHA-256", data);
+    settingsName: document.getElementById("settingsName")
+};
 
-    return Array.from(new Uint8Array(hash))
-        .map((byte) => byte.toString(16).padStart(2, "0"))
-        .join("");
-}
+function toast(message) {
+    els.toast.textContent = message;
+    els.toast.classList.remove("hidden");
 
-function createNewUser(name, email, passwordHash) {
-    return {
-        id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
-        name,
-        email,
-        passwordHash,
-        createdAt: new Date().toISOString(),
-        stats: {
-            streak: 0,
-            xp: 0,
-            goalsCompleted: 0,
-            goalsTotal: 0,
-            flashcardsReviewed: 0,
-            studyHours: 0,
-            notesCreated: 0,
-            quizzesTaken: 0,
-            trophies: 0,
-            aiCredits: 5
-        },
-        notes: [],
-        flashcards: [],
-        activity: []
-    };
-}
+    clearTimeout(window.__toastTimer);
 
-function showToast(message) {
-    toast.textContent = message;
-    toast.classList.remove("hidden");
-
-    setTimeout(() => {
-        toast.classList.add("hidden");
+    window.__toastTimer = setTimeout(() => {
+        els.toast.classList.add("hidden");
     }, 2600);
-}
-
-function addActivity(text) {
-    if (!state.user) return;
-
-    state.user.activity.unshift({
-        id: Date.now(),
-        text,
-        time: "Just now"
-    });
-
-    state.user.activity = state.user.activity.slice(0, 8);
-    saveCurrentUser(state.user);
 }
 
 function setTheme(theme) {
     document.body.dataset.theme = theme;
-    localStorage.setItem(THEME_KEY, theme);
+    localStorage.setItem("studysnap_theme", theme);
 
-    const icon = theme === "dark" ? "☀" : "☾";
-
-    document.getElementById("themeToggle").textContent = icon;
-    document.getElementById("sideThemeToggle").textContent = theme === "dark" ? "☾" : "☀";
+    document.getElementById("themeBtn").textContent = theme === "dark" ? "☀" : "☾";
+    document.getElementById("sidebarThemeBtn").textContent = theme === "dark" ? "☾" : "☀";
 }
 
 function toggleTheme() {
-    const current = document.body.dataset.theme;
+    const current = document.body.dataset.theme || "dark";
     setTheme(current === "dark" ? "light" : "dark");
 }
 
-function boot() {
-    const savedTheme = localStorage.getItem(THEME_KEY) || "dark";
-    setTheme(savedTheme);
-
-    const user = getCurrentUser();
-
-    if (user) {
-        state.user = user;
-        authView.classList.add("hidden");
-        appView.classList.remove("hidden");
-        renderAll();
-    } else {
-        authView.classList.remove("hidden");
-        appView.classList.add("hidden");
-    }
-}
-
-document.querySelectorAll("[data-auth-tab]").forEach((button) => {
-    button.addEventListener("click", () => {
-        document.querySelectorAll("[data-auth-tab]").forEach((tab) => tab.classList.remove("active"));
-        button.classList.add("active");
-
-        const tab = button.dataset.authTab;
-
-        document.getElementById("loginForm").classList.toggle("hidden", tab !== "login");
-        document.getElementById("signupForm").classList.toggle("hidden", tab !== "signup");
-    });
-});
-
-document.getElementById("signupForm").addEventListener("submit", async (event) => {
-    event.preventDefault();
-
-    const name = document.getElementById("signupName").value.trim();
-    const email = document.getElementById("signupEmail").value.trim().toLowerCase();
-    const password = document.getElementById("signupPassword").value;
-
-    const users = getUsers();
-
-    if (users.some((user) => user.email === email)) {
-        document.getElementById("signupMessage").textContent = "Account already exists. Try logging in.";
-        return;
-    }
-
-    const passwordHash = await hashPassword(password);
-    const user = createNewUser(name, email, passwordHash);
-
-    users.push(user);
-    saveUsers(users);
-
-    localStorage.setItem(SESSION_KEY, user.id);
-    state.user = user;
-
-    authView.classList.add("hidden");
-    appView.classList.remove("hidden");
-
-    showToast("Account created. Welcome to StudySnap.");
-    renderAll();
-});
-
-document.getElementById("loginForm").addEventListener("submit", async (event) => {
-    event.preventDefault();
-
-    const email = document.getElementById("loginEmail").value.trim().toLowerCase();
-    const password = document.getElementById("loginPassword").value;
-    const passwordHash = await hashPassword(password);
-
-    const users = getUsers();
-    const user = users.find((item) => item.email === email && item.passwordHash === passwordHash);
-
-    if (!user) {
-        document.getElementById("loginMessage").textContent = "Incorrect email or password.";
-        return;
-    }
-
-    localStorage.setItem(SESSION_KEY, user.id);
-    state.user = user;
-
-    authView.classList.add("hidden");
-    appView.classList.remove("hidden");
-
-    showToast("Logged in successfully.");
-    renderAll();
-});
-
 function showPage(page) {
     document.querySelectorAll(".page").forEach((panel) => {
-        panel.classList.toggle("active", panel.dataset.pagePanel === page);
+        panel.classList.toggle("active", panel.dataset.page === page);
     });
 
-    document.querySelectorAll(".nav-link[data-page]").forEach((button) => {
+    document.querySelectorAll(".nav-btn").forEach((button) => {
         button.classList.toggle("active", button.dataset.page === page);
     });
 
-    if (page === "settings") {
-        document.getElementById("settingsName").value = state.user.name;
+    if (page === "settings" && state.profile) {
+        els.settingsName.value = state.profile.display_name || "";
     }
 
-    window.scrollTo({
-        top: 0,
-        behavior: "smooth"
+    window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function showApp() {
+    els.authScreen.classList.add("hidden");
+    els.appScreen.classList.remove("hidden");
+}
+
+function showAuth() {
+    els.appScreen.classList.add("hidden");
+    els.authScreen.classList.remove("hidden");
+}
+
+async function init() {
+    setTheme(localStorage.getItem("studysnap_theme") || "dark");
+
+    bindEvents();
+
+    if (!isSupabaseReady) {
+        toast("Supabase is not connected yet. Add your Supabase URL and anon key in script.js.");
+        showAuth();
+        return;
+    }
+
+    const { data } = await supabaseClient.auth.getSession();
+
+    if (data.session?.user) {
+        state.user = data.session.user;
+        await loadUserData();
+        showApp();
+        render();
+    } else {
+        showAuth();
+    }
+
+    supabaseClient.auth.onAuthStateChange(async (_event, session) => {
+        state.user = session?.user || null;
+
+        if (state.user) {
+            await loadUserData();
+            showApp();
+            render();
+        } else {
+            showAuth();
+        }
     });
 }
 
-document.querySelectorAll("[data-page]").forEach((button) => {
-    button.addEventListener("click", () => {
-        showPage(button.dataset.page);
+function bindEvents() {
+    document.querySelectorAll("[data-auth-tab]").forEach((button) => {
+        button.addEventListener("click", () => {
+            document.querySelectorAll("[data-auth-tab]").forEach((tab) => {
+                tab.classList.remove("active");
+            });
+
+            button.classList.add("active");
+
+            const tab = button.dataset.authTab;
+            els.loginForm.classList.toggle("hidden", tab !== "login");
+            els.signupForm.classList.toggle("hidden", tab !== "signup");
+        });
     });
-});
 
-document.querySelectorAll("[data-goto]").forEach((button) => {
-    button.addEventListener("click", () => {
-        showPage(button.dataset.goto);
+    document.querySelectorAll("[data-page]").forEach((button) => {
+        button.addEventListener("click", () => {
+            showPage(button.dataset.page);
+        });
     });
-});
 
-document.getElementById("themeToggle").addEventListener("click", toggleTheme);
-document.getElementById("sideThemeToggle").addEventListener("click", toggleTheme);
+    document.getElementById("themeBtn").addEventListener("click", toggleTheme);
+    document.getElementById("sidebarThemeBtn").addEventListener("click", toggleTheme);
+    document.getElementById("settingsThemeBtn").addEventListener("click", toggleTheme);
 
-document.getElementById("notificationButton").addEventListener("click", () => {
-    showToast("No notifications yet. Start studying to create activity.");
-});
+    document.getElementById("notifyBtn").addEventListener("click", () => {
+        toast("No notifications yet.");
+    });
 
-document.getElementById("profileButton").addEventListener("click", () => {
-    showPage("settings");
-});
+    document.getElementById("profileBtn").addEventListener("click", () => {
+        showPage("settings");
+    });
 
-function renderAll() {
+    els.loginForm.addEventListener("submit", handleLogin);
+    els.signupForm.addEventListener("submit", handleSignup);
+
+    els.fileInput.addEventListener("change", handleFileSelect);
+    els.generateBtn.addEventListener("click", generateNotesFromPage);
+
+    document.getElementById("saveCardsBtn").addEventListener("click", makeFlashcardsFromLatestNote);
+    document.getElementById("nextCardBtn").addEventListener("click", nextCard);
+    document.getElementById("flipBtn").addEventListener("click", flipCard);
+    document.getElementById("correctBtn").addEventListener("click", markCardCorrect);
+    document.getElementById("wrongBtn").addEventListener("click", markCardWrong);
+    document.getElementById("resetCardsBtn").addEventListener("click", clearCards);
+
+    document.getElementById("startQuizBtn").addEventListener("click", startQuiz);
+    document.getElementById("submitQuizBtn").addEventListener("click", submitQuizAnswer);
+
+    document.getElementById("completeSessionBtn").addEventListener("click", completeStudySession);
+    document.getElementById("openPackBtn").addEventListener("click", openPack);
+
+    document.getElementById("saveSettingsBtn").addEventListener("click", saveSettings);
+    document.getElementById("logoutBtn").addEventListener("click", logout);
+}
+
+async function handleSignup(event) {
+    event.preventDefault();
+
+    if (!isSupabaseReady) {
+        toast("Connect Supabase first.");
+        return;
+    }
+
+    const displayName = document.getElementById("signupName").value.trim();
+    const email = document.getElementById("signupEmail").value.trim();
+    const password = document.getElementById("signupPassword").value;
+
+    const { error } = await supabaseClient.auth.signUp({
+        email,
+        password,
+        options: {
+            data: {
+                display_name: displayName
+            }
+        }
+    });
+
+    if (error) {
+        toast(error.message);
+        return;
+    }
+
+    toast("Account created. Check email if confirmation is enabled.");
+}
+
+async function handleLogin(event) {
+    event.preventDefault();
+
+    if (!isSupabaseReady) {
+        toast("Connect Supabase first.");
+        return;
+    }
+
+    const email = document.getElementById("loginEmail").value.trim();
+    const password = document.getElementById("loginPassword").value;
+
+    const { error } = await supabaseClient.auth.signInWithPassword({
+        email,
+        password
+    });
+
+    if (error) {
+        toast(error.message);
+        return;
+    }
+
+    toast("Logged in.");
+}
+
+async function logout() {
+    await supabaseClient.auth.signOut();
+    toast("Logged out.");
+}
+
+async function loadUserData() {
     if (!state.user) return;
 
-    const firstName = state.user.name.split(" ")[0] || "Student";
-    const initial = firstName.charAt(0).toUpperCase();
+    let { data: profile, error: profileError } = await supabaseClient
+        .from("profiles")
+        .select("*")
+        .eq("id", state.user.id)
+        .single();
 
-    document.getElementById("dashboardGreeting").textContent = `Welcome back, ${firstName}.`;
-    document.getElementById("profileInitial").textContent = initial;
-    document.getElementById("bigProfileInitial").textContent = initial;
-    document.getElementById("profileName").textContent = state.user.name;
+    if (profileError || !profile) {
+        const fallbackName =
+            state.user.user_metadata?.display_name ||
+            state.user.email?.split("@")[0] ||
+            "Student";
 
-    const stats = state.user.stats;
+        const { data: insertedProfile } = await supabaseClient
+            .from("profiles")
+            .insert({
+                id: state.user.id,
+                display_name: fallbackName
+            })
+            .select()
+            .single();
 
-    document.getElementById("dashStreak").textContent = stats.streak;
-    document.getElementById("dashXP").textContent = stats.xp;
-    document.getElementById("dashGoals").textContent = `${stats.goalsCompleted}/${stats.goalsTotal}`;
-    document.getElementById("dashCards").textContent = stats.flashcardsReviewed;
+        profile = insertedProfile;
+    }
 
-    document.getElementById("studyHours").textContent = stats.studyHours.toFixed(1);
-    document.getElementById("notesCount").textContent = stats.notesCreated;
-    document.getElementById("quizzesCount").textContent = stats.quizzesTaken;
-    document.getElementById("trophiesCount").textContent = stats.trophies;
+    const { data: notes } = await supabaseClient
+        .from("notes")
+        .select("*")
+        .eq("user_id", state.user.id)
+        .order("created_at", { ascending: false });
 
-    document.getElementById("levelXP").textContent = `${stats.xp} / 500 XP`;
-    document.getElementById("levelBar").style.width = `${Math.min((stats.xp / 500) * 100, 100)}%`;
+    const { data: activities } = await supabaseClient
+        .from("activities")
+        .select("*")
+        .eq("user_id", state.user.id)
+        .order("created_at", { ascending: false })
+        .limit(8);
 
-    document.getElementById("progressNotes").style.width = `${Math.min(stats.notesCreated * 15, 100)}%`;
-    document.getElementById("progressCards").style.width = `${Math.min(state.user.flashcards.length * 8, 100)}%`;
-    document.getElementById("progressXP").style.width = `${Math.min((stats.xp / 500) * 100, 100)}%`;
+    state.profile = profile;
+    state.notes = notes || [];
+    state.activities = activities || [];
 
-    renderActivity();
+    state.latestNote = state.notes[0] || null;
+    state.flashcards = state.latestNote?.flashcards || [];
+}
+
+function render() {
+    if (!state.profile) return;
+
+    const name = state.profile.display_name || "Student";
+    const firstName = name.split(" ")[0];
+    const initial = firstName.charAt(0).toUpperCase() || "S";
+
+    els.welcomeTitle.textContent = `Welcome back, ${firstName}.`;
+    els.profileName.textContent = name;
+    els.profileBtn.textContent = initial;
+    els.bigAvatar.textContent = initial;
+
+    const xp = state.profile.xp || 0;
+
+    els.streakValue.textContent = state.profile.streak || 0;
+    els.xpValue.textContent = xp;
+    els.cardsValue.textContent = state.flashcards.length || 0;
+    els.trophyValue.textContent = state.profile.trophies || 0;
+
+    els.levelText.textContent = `${xp} / 500 XP`;
+    els.levelFill.style.width = `${Math.min((xp / 500) * 100, 100)}%`;
+
+    renderActivities();
+    renderNotes();
     renderFlashcard();
-    updateCardCounter();
+    renderQuiz();
 }
 
-function renderActivity() {
-    const list = document.getElementById("activityList");
-    const activity = state.user.activity;
+function renderActivities() {
+    els.activityCount.textContent = `${state.activities.length} events`;
 
-    document.getElementById("activityCount").textContent = `${activity.length} events`;
-
-    if (!activity.length) {
-        list.innerHTML = `<p class="empty-text">No activity yet.</p>`;
+    if (!state.activities.length) {
+        els.activityList.innerHTML = `<p class="empty">No activity yet.</p>`;
         return;
     }
 
-    list.innerHTML = activity.map((item) => `
-        <div class="activity-item">
-            <strong>${item.text}</strong>
-            <span>${item.time}</span>
-        </div>
-    `).join("");
+    els.activityList.innerHTML = state.activities.map((item) => {
+        return `
+            <div class="activity-item">
+                <strong>${escapeHTML(item.title)}</strong>
+                <span>${new Date(item.created_at).toLocaleString()}</span>
+            </div>
+        `;
+    }).join("");
 }
 
-document.getElementById("completeSessionButton").addEventListener("click", () => {
-    state.user.stats.studyHours += 0.5;
-    state.user.stats.xp += 50;
-    state.user.stats.trophies += 1;
-    state.user.stats.streak = Math.max(state.user.stats.streak, 1);
-
-    addActivity("Completed a study session");
-    showToast("+50 XP and +1 trophy earned.");
-    saveCurrentUser(state.user);
-});
-
-document.getElementById("fileInput").addEventListener("change", (event) => {
-    const file = event.target.files[0];
-    document.getElementById("fileName").textContent = file ? file.name : "Optional for now";
-});
-
-document.getElementById("generateNotesButton").addEventListener("click", () => {
-    const text = document.getElementById("materialInput").value.trim();
-    const focus = document.getElementById("focusMode").value;
-
-    if (!text) {
-        showToast("Paste some study material first.");
+function renderNotes() {
+    if (!state.latestNote) {
+        els.notesOutput.innerHTML = "Your notes will appear here after generation.";
         return;
     }
 
-    const sentences = text
-        .replace(/\s+/g, " ")
-        .split(/(?<=[.!?])\s+/)
-        .filter(Boolean);
+    const content = state.latestNote.content || {};
 
-    const selected = sentences.slice(0, 6);
-    const keywords = text
-        .replace(/[^\w\s]/g, "")
-        .split(/\s+/)
-        .filter((word) => word.length > 5)
-        .slice(0, 8);
+    els.notesOutput.innerHTML = noteToHTML(content);
+}
 
-    const title = `Study Notes ${state.user.notes.length + 1}`;
+function noteToHTML(content) {
+    const sections = Array.isArray(content.sections) ? content.sections : [];
+    const terms = Array.isArray(content.key_terms) ? content.key_terms : [];
 
-    const note = {
-        id: Date.now(),
-        title,
-        focus,
-        raw: text,
-        summary: selected.join(" "),
-        bullets: selected.length ? selected : [text.slice(0, 180)],
-        keywords,
-        createdAt: new Date().toISOString()
-    };
+    return `
+        <h3>${escapeHTML(content.title || "Generated Notes")}</h3>
 
-    state.user.notes.unshift(note);
-    state.user.stats.notesCreated = state.user.notes.length;
-    state.user.stats.xp += 20;
-
-    const output = `
-        <h4>${title}</h4>
-        <p><strong>Focus:</strong> ${focus}</p>
         <h4>Summary</h4>
-        <p>${note.summary}</p>
-        <h4>Key Points</h4>
-        <ul>
-            ${note.bullets.map((point) => `<li>${point}</li>`).join("")}
-        </ul>
-        <h4>Keywords</h4>
-        <p>${keywords.length ? keywords.join(", ") : "No keywords detected yet."}</p>
+        <p>${escapeHTML(content.summary || "No summary generated.")}</p>
+
+        <h4>Sections</h4>
+        ${sections.length ? sections.map((section) => `
+            <h4>${escapeHTML(section.heading || "Section")}</h4>
+            <ul>
+                ${(section.bullets || []).map((point) => `<li>${escapeHTML(point)}</li>`).join("")}
+            </ul>
+        `).join("") : "<p>No sections generated.</p>"}
+
+        <h4>Key Terms</h4>
+        ${terms.length ? `
+            <ul>
+                ${terms.map((term) => `
+                    <li><strong>${escapeHTML(term.term || "")}</strong>: ${escapeHTML(term.definition || "")}</li>
+                `).join("")}
+            </ul>
+        ` : "<p>No key terms generated.</p>"}
     `;
+}
 
-    document.getElementById("notesOutput").innerHTML = output;
+function handleFileSelect(event) {
+    const file = event.target.files[0];
+    state.selectedFile = file || null;
 
-    addActivity("Generated study notes");
-    showToast("Notes generated. +20 XP.");
-    saveCurrentUser(state.user);
-});
-
-document.getElementById("createCardsButton").addEventListener("click", () => {
-    const latestNote = state.user.notes[0];
-
-    if (!latestNote) {
-        showToast("Generate notes first.");
+    if (!file) {
+        els.uploadTitle.textContent = "Choose photo or PDF";
+        els.uploadSub.textContent = "PNG, JPG, WEBP, or PDF";
         return;
     }
 
-    const cards = latestNote.bullets.slice(0, 6).map((point, index) => {
-        const keyword = latestNote.keywords[index] || `Concept ${index + 1}`;
+    els.uploadTitle.textContent = file.name;
+    els.uploadSub.textContent = `${Math.round(file.size / 1024)} KB selected`;
+}
 
-        return {
-            id: Date.now() + index,
-            question: `Explain: ${keyword}`,
-            answer: point,
-            reviewed: false
-        };
-    });
+async function generateNotesFromPage() {
+    if (!isSupabaseReady) {
+        toast("Connect Supabase first.");
+        return;
+    }
 
-    state.user.flashcards = [...cards, ...state.user.flashcards];
-    state.user.stats.xp += 15;
+    if (!state.user) {
+        toast("Login first.");
+        return;
+    }
 
-    state.currentCardIndex = 0;
-    state.cardFlipped = false;
+    if (!state.selectedFile) {
+        toast("Upload a page or PDF first.");
+        return;
+    }
 
-    addActivity("Created flashcards");
-    showToast(`${cards.length} flashcards created. +15 XP.`);
-    saveCurrentUser(state.user);
-});
+    const file = state.selectedFile;
 
-document.getElementById("resetCardsButton").addEventListener("click", () => {
-    state.user.flashcards = [];
-    state.user.stats.flashcardsReviewed = 0;
-    state.currentCardIndex = 0;
-    state.cardFlipped = false;
+    if (file.size > 10 * 1024 * 1024) {
+        toast("File too large. Keep it under 10MB for now.");
+        return;
+    }
 
-    addActivity("Cleared flashcards");
-    saveCurrentUser(state.user);
-});
+    els.generateBtn.disabled = true;
+    els.generateBtn.textContent = "Generating...";
+    els.generateStatus.textContent = "Uploading file to Supabase Storage...";
 
-function updateCardCounter() {
-    document.getElementById("cardCounter").textContent = `${state.user.flashcards.length} cards`;
+    try {
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+        const filePath = `${state.user.id}/${Date.now()}-${safeName}`;
+
+        const { error: uploadError } = await supabaseClient
+            .storage
+            .from("study-files")
+            .upload(filePath, file, {
+                contentType: file.type,
+                upsert: false
+            });
+
+        if (uploadError) throw uploadError;
+
+        els.generateStatus.textContent = "File uploaded. AI is reading the page...";
+
+        const { data, error } = await supabaseClient.functions.invoke("generate-notes", {
+            body: {
+                filePath,
+                fileName: file.name,
+                mimeType: file.type,
+                focus: els.focusSelect.value
+            }
+        });
+
+        if (error) throw error;
+        if (data?.error) throw new Error(data.error);
+
+        els.generateStatus.textContent = "Notes generated successfully.";
+
+        await loadUserData();
+        render();
+
+        toast("+25 XP. Notes generated from page.");
+    } catch (error) {
+        console.error(error);
+        els.generateStatus.textContent = error.message || "Generation failed.";
+        toast(error.message || "Generation failed.");
+    } finally {
+        els.generateBtn.disabled = false;
+        els.generateBtn.textContent = "Generate Notes From Page";
+    }
+}
+
+async function makeFlashcardsFromLatestNote() {
+    if (!state.latestNote) {
+        toast("Generate notes first.");
+        return;
+    }
+
+    const content = state.latestNote.content || {};
+    const flashcards = Array.isArray(content.flashcards) ? content.flashcards : [];
+
+    if (!flashcards.length) {
+        toast("No flashcards were generated in the latest note.");
+        return;
+    }
+
+    const { error } = await supabaseClient
+        .from("notes")
+        .update({
+            flashcards
+        })
+        .eq("id", state.latestNote.id);
+
+    if (error) {
+        toast(error.message);
+        return;
+    }
+
+    await addActivity("Created flashcards");
+    await loadUserData();
+    render();
+    showPage("flashcards");
+    toast(`${flashcards.length} flashcards ready.`);
 }
 
 function renderFlashcard() {
-    const cards = state.user.flashcards;
-    const label = document.getElementById("flashLabel");
-    const question = document.getElementById("flashQuestion");
-    const answer = document.getElementById("flashAnswer");
-    const explain = document.getElementById("wrongExplain");
+    els.wrongBox.classList.add("hidden");
 
-    explain.classList.add("hidden");
-
-    if (!cards.length) {
-        label.textContent = "No card yet";
-        question.textContent = "Create flashcards first.";
-        answer.textContent = "Your answer will show here.";
+    if (!state.flashcards.length) {
+        els.cardCountText.textContent = "0 cards available.";
+        els.flashLabel.textContent = "No flashcard";
+        els.flashQuestion.textContent = "Generate notes first.";
+        els.flashAnswer.textContent = "The answer will show after you flip.";
         return;
     }
 
-    const card = cards[state.currentCardIndex % cards.length];
+    const card = state.flashcards[state.currentCardIndex % state.flashcards.length];
 
-    label.textContent = `Card ${state.currentCardIndex + 1} of ${cards.length}`;
-    question.textContent = card.question;
-    answer.textContent = state.cardFlipped ? card.answer : "Click Flip to reveal the answer.";
+    els.cardCountText.textContent = `${state.flashcards.length} cards available.`;
+    els.flashLabel.textContent = `Card ${state.currentCardIndex + 1} of ${state.flashcards.length}`;
+    els.flashQuestion.textContent = card.question || "Question";
+    els.flashAnswer.textContent = state.flipped ? (card.answer || "No answer.") : "Click Flip to reveal the answer.";
 }
 
-document.getElementById("flipCardButton").addEventListener("click", () => {
-    if (!state.user.flashcards.length) return;
+function flipCard() {
+    if (!state.flashcards.length) return;
 
-    state.cardFlipped = !state.cardFlipped;
+    state.flipped = !state.flipped;
     renderFlashcard();
-});
+}
 
-document.getElementById("rightCardButton").addEventListener("click", () => {
-    if (!state.user.flashcards.length) return;
+function nextCard() {
+    if (!state.flashcards.length) return;
 
-    state.user.stats.flashcardsReviewed += 1;
-    state.user.stats.xp += 5;
+    state.currentCardIndex = (state.currentCardIndex + 1) % state.flashcards.length;
+    state.flipped = false;
+    renderFlashcard();
+}
 
-    state.currentCardIndex = (state.currentCardIndex + 1) % state.user.flashcards.length;
-    state.cardFlipped = false;
+async function markCardCorrect() {
+    if (!state.flashcards.length) return;
 
-    addActivity("Reviewed a flashcard correctly");
-    showToast("+5 XP. Correct.");
-    saveCurrentUser(state.user);
-});
+    await updateProfile({
+        cards_reviewed: (state.profile.cards_reviewed || 0) + 1,
+        xp: (state.profile.xp || 0) + 5
+    });
 
-document.getElementById("wrongCardButton").addEventListener("click", () => {
-    if (!state.user.flashcards.length) return;
+    await addActivity("Reviewed a flashcard correctly");
 
-    const card = state.user.flashcards[state.currentCardIndex];
-    const explain = document.getElementById("wrongExplain");
+    nextCard();
+    await loadUserData();
+    render();
+    toast("+5 XP.");
+}
 
-    explain.innerHTML = `
+function markCardWrong() {
+    if (!state.flashcards.length) return;
+
+    const card = state.flashcards[state.currentCardIndex];
+
+    els.wrongBox.innerHTML = `
         <strong>Review tip:</strong>
-        You missed this card. Read the answer again, then say it out loud without looking.
+        You missed this card. Read the answer again, cover it, then explain it out loud.
         <br><br>
-        <strong>Correct idea:</strong> ${card.answer}
+        <strong>Correct answer:</strong> ${escapeHTML(card.answer || "")}
     `;
 
-    explain.classList.remove("hidden");
-});
+    els.wrongBox.classList.remove("hidden");
+}
 
-document.getElementById("startQuizButton").addEventListener("click", () => {
-    if (!state.user.flashcards.length) {
-        showToast("Create flashcards first.");
+async function clearCards() {
+    if (!state.latestNote) return;
+
+    await supabaseClient
+        .from("notes")
+        .update({ flashcards: [] })
+        .eq("id", state.latestNote.id);
+
+    state.flashcards = [];
+    state.currentCardIndex = 0;
+    state.flipped = false;
+
+    render();
+    toast("Cards cleared.");
+}
+
+function startQuiz() {
+    if (!state.flashcards.length) {
+        toast("Create flashcards first.");
         return;
     }
 
@@ -488,180 +615,175 @@ document.getElementById("startQuizButton").addEventListener("click", () => {
     state.quizScore = 0;
 
     renderQuiz();
-});
-
-function renderQuiz() {
-    const cards = state.user.flashcards;
-
-    if (!state.quizActive || !cards.length) {
-        document.getElementById("quizTitle").textContent = "Quiz not started";
-        document.getElementById("quizProgress").textContent = `0 / ${cards.length}`;
-        document.getElementById("quizQuestion").textContent = "Create flashcards first, then start a quiz.";
-        return;
-    }
-
-    const card = cards[state.quizIndex];
-
-    document.getElementById("quizTitle").textContent = "Active Quiz";
-    document.getElementById("quizProgress").textContent = `${state.quizIndex + 1} / ${cards.length}`;
-    document.getElementById("quizQuestion").textContent = card.question;
-    document.getElementById("quizAnswer").value = "";
-    document.getElementById("quizFeedback").classList.add("hidden");
 }
 
-document.getElementById("submitQuizButton").addEventListener("click", () => {
-    if (!state.quizActive || !state.user.flashcards.length) {
-        showToast("Start a quiz first.");
+function renderQuiz() {
+    if (!state.flashcards.length || !state.quizActive) {
+        els.quizTitle.textContent = "Quiz not started";
+        els.quizProgress.textContent = `0 / ${state.flashcards.length}`;
+        els.quizQuestion.textContent = state.flashcards.length ? "Press Start Quiz." : "Generate flashcards first.";
+        els.quizFeedback.classList.add("hidden");
         return;
     }
 
-    const cards = state.user.flashcards;
-    const card = cards[state.quizIndex];
-    const answer = document.getElementById("quizAnswer").value.trim().toLowerCase();
+    const card = state.flashcards[state.quizIndex];
 
-    const importantWords = card.answer
+    els.quizTitle.textContent = "Active Quiz";
+    els.quizProgress.textContent = `${state.quizIndex + 1} / ${state.flashcards.length}`;
+    els.quizQuestion.textContent = card.question || "Question";
+    els.quizInput.value = "";
+    els.quizFeedback.classList.add("hidden");
+}
+
+async function submitQuizAnswer() {
+    if (!state.quizActive || !state.flashcards.length) {
+        toast("Start quiz first.");
+        return;
+    }
+
+    const card = state.flashcards[state.quizIndex];
+    const answer = els.quizInput.value.trim().toLowerCase();
+
+    const importantWords = String(card.answer || "")
         .toLowerCase()
         .replace(/[^\w\s]/g, "")
         .split(/\s+/)
         .filter((word) => word.length > 5)
-        .slice(0, 3);
+        .slice(0, 4);
 
     const correct = importantWords.some((word) => answer.includes(word));
 
-    const feedback = document.getElementById("quizFeedback");
-
     if (correct) {
         state.quizScore += 1;
-        feedback.innerHTML = `<strong>Correct.</strong> Good job. You included an important idea.`;
+
+        els.quizFeedback.innerHTML = `
+            <strong>Correct.</strong>
+            You included one of the important ideas.
+        `;
     } else {
-        feedback.innerHTML = `
+        els.quizFeedback.innerHTML = `
             <strong>Not quite.</strong>
-            The correct idea was:
             <br><br>
-            ${card.answer}
+            Correct idea: ${escapeHTML(card.answer || "")}
             <br><br>
             Try remembering the main keyword first, then explain it in your own words.
         `;
     }
 
-    feedback.classList.remove("hidden");
+    els.quizFeedback.classList.remove("hidden");
 
-    setTimeout(() => {
+    setTimeout(async () => {
         state.quizIndex += 1;
 
-        if (state.quizIndex >= cards.length) {
+        if (state.quizIndex >= state.flashcards.length) {
             state.quizActive = false;
-            state.user.stats.quizzesTaken += 1;
-            state.user.stats.xp += state.quizScore * 10;
-            state.user.stats.trophies += 1;
 
-            addActivity(`Completed quiz: ${state.quizScore}/${cards.length}`);
-            showToast(`Quiz complete. Score: ${state.quizScore}/${cards.length}.`);
+            await updateProfile({
+                quizzes_taken: (state.profile.quizzes_taken || 0) + 1,
+                trophies: (state.profile.trophies || 0) + 1,
+                xp: (state.profile.xp || 0) + state.quizScore * 10
+            });
 
-            saveCurrentUser(state.user);
-            renderQuiz();
+            await addActivity(`Completed quiz: ${state.quizScore}/${state.flashcards.length}`);
+
+            await loadUserData();
+            render();
+
+            toast(`Quiz complete. Score: ${state.quizScore}/${state.flashcards.length}.`);
             return;
         }
 
         renderQuiz();
-    }, 1300);
-});
+    }, 1200);
+}
 
-document.querySelectorAll("[data-pack]").forEach((button) => {
-    button.addEventListener("click", () => {
-        if (state.user.stats.trophies < 1) {
-            showToast("You need 1 trophy to open a pack.");
-            return;
-        }
-
-        const rewards = [
-            { text: "+25 XP", apply: () => state.user.stats.xp += 25 },
-            { text: "+1 AI Credit", apply: () => state.user.stats.aiCredits += 1 },
-            { text: "+1 Trophy Back", apply: () => state.user.stats.trophies += 1 },
-            { text: "+0.2 Study Hours", apply: () => state.user.stats.studyHours += 0.2 }
-        ];
-
-        state.user.stats.trophies -= 1;
-
-        const reward = rewards[Math.floor(Math.random() * rewards.length)];
-        reward.apply();
-
-        addActivity(`Opened pack and won ${reward.text}`);
-        showToast(`Pack opened: ${reward.text}`);
-        saveCurrentUser(state.user);
+async function completeStudySession() {
+    await updateProfile({
+        streak: Math.max(state.profile.streak || 0, 1),
+        study_hours: Number(state.profile.study_hours || 0) + 0.5,
+        trophies: (state.profile.trophies || 0) + 1,
+        xp: (state.profile.xp || 0) + 40
     });
-});
 
-document.getElementById("saveSettingsButton").addEventListener("click", () => {
-    const name = document.getElementById("settingsName").value.trim();
+    await addActivity("Completed a study session");
+    await loadUserData();
+    render();
 
-    if (!name) {
-        showToast("Name cannot be empty.");
+    toast("+40 XP and +1 trophy.");
+}
+
+async function openPack() {
+    if ((state.profile.trophies || 0) < 1) {
+        toast("You need 1 trophy to open a pack.");
         return;
     }
 
-    state.user.name = name;
-    addActivity("Updated profile settings");
-    saveCurrentUser(state.user);
-    showToast("Settings saved.");
-});
+    const rewards = [
+        { name: "+25 XP", data: { xp: (state.profile.xp || 0) + 25 } },
+        { name: "+1 AI Credit", data: { ai_credits: (state.profile.ai_credits || 0) + 1 } },
+        { name: "+0.2 Study Hours", data: { study_hours: Number(state.profile.study_hours || 0) + 0.2 } }
+    ];
 
-document.getElementById("settingsThemeButton").addEventListener("click", toggleTheme);
+    const reward = rewards[Math.floor(Math.random() * rewards.length)];
 
-document.getElementById("resetAccountButton").addEventListener("click", () => {
-    const confirmReset = confirm("Reset all StudySnap prototype data for this account?");
-
-    if (!confirmReset) return;
-
-    state.user.stats = {
-        streak: 0,
-        xp: 0,
-        goalsCompleted: 0,
-        goalsTotal: 0,
-        flashcardsReviewed: 0,
-        studyHours: 0,
-        notesCreated: 0,
-        quizzesTaken: 0,
-        trophies: 0,
-        aiCredits: 5
-    };
-
-    state.user.notes = [];
-    state.user.flashcards = [];
-    state.user.activity = [];
-
-    saveCurrentUser(state.user);
-    showToast("Account data reset.");
-});
-
-document.getElementById("logoutButton").addEventListener("click", () => {
-    localStorage.removeItem(SESSION_KEY);
-    state.user = null;
-    appView.classList.add("hidden");
-    authView.classList.remove("hidden");
-    showToast("Logged out.");
-});
-
-document.querySelectorAll(".tilt-card").forEach((card) => {
-    card.addEventListener("mousemove", (event) => {
-        const rect = card.getBoundingClientRect();
-        const x = (event.clientX - rect.left) / rect.width - 0.5;
-        const y = (event.clientY - rect.top) / rect.height - 0.5;
-
-        card.style.transform = `perspective(1000px) rotateX(${y * -5}deg) rotateY(${x * 6}deg)`;
+    await updateProfile({
+        trophies: (state.profile.trophies || 0) - 1,
+        ...reward.data
     });
 
-    card.addEventListener("mouseleave", () => {
-        card.style.transform = "perspective(1000px) rotateX(0deg) rotateY(0deg)";
+    await addActivity(`Opened pack and won ${reward.name}`);
+    await loadUserData();
+    render();
+
+    toast(`Pack opened: ${reward.name}`);
+}
+
+async function saveSettings() {
+    const displayName = els.settingsName.value.trim();
+
+    if (!displayName) {
+        toast("Name cannot be empty.");
+        return;
+    }
+
+    await updateProfile({
+        display_name: displayName
     });
-});
 
-document.addEventListener("mousemove", (event) => {
-    const x = event.clientX / window.innerWidth;
-    const y = event.clientY / window.innerHeight;
+    await addActivity("Updated profile settings");
+    await loadUserData();
+    render();
 
-    document.documentElement.style.setProperty("--mouse-x", x);
-    document.documentElement.style.setProperty("--mouse-y", y);
-});
+    toast("Settings saved.");
+}
 
-boot();
+async function updateProfile(values) {
+    const { error } = await supabaseClient
+        .from("profiles")
+        .update(values)
+        .eq("id", state.user.id);
+
+    if (error) {
+        toast(error.message);
+    }
+}
+
+async function addActivity(title) {
+    await supabaseClient
+        .from("activities")
+        .insert({
+            user_id: state.user.id,
+            title
+        });
+}
+
+function escapeHTML(value) {
+    return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+}
+
+init();

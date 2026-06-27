@@ -4,500 +4,425 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>StudySnap</title>
+
     <link rel="stylesheet" href="style.css" />
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
+
 <body data-theme="dark">
 
-    <div class="background" aria-hidden="true">
-        <span class="grid-layer"></span>
-        <span class="orb orb-one"></span>
-        <span class="orb orb-two"></span>
-        <span class="orb orb-three"></span>
-        <span class="ring ring-one"></span>
-        <span class="ring ring-two"></span>
-        <span class="beam beam-one"></span>
-        <span class="beam beam-two"></span>
+    <div class="bg">
+        <div class="bg-grid"></div>
+        <div class="bg-glow glow-a"></div>
+        <div class="bg-glow glow-b"></div>
+        <div class="bg-glow glow-c"></div>
+        <div class="bg-ring ring-a"></div>
+        <div class="bg-ring ring-b"></div>
     </div>
 
-    <section id="authView" class="auth-view">
+    <div id="toast" class="toast hidden"></div>
+
+    <section id="authScreen" class="auth-screen">
         <div class="auth-brand">
-            <div class="brand-mark">S</div>
+            <div class="brand-icon">S</div>
             <div>
-                <strong>StudySnap</strong>
-                <span>AI study dashboard</span>
+                <h1>StudySnap</h1>
+                <p>AI notes, flashcards, quizzes, and rewards.</p>
             </div>
         </div>
 
-        <div class="auth-shell glass-panel">
-            <div class="auth-copy">
-                <span class="eyebrow">Welcome to StudySnap</span>
-                <h1>Turn studying into progress.</h1>
+        <div class="auth-card glass">
+            <div class="auth-left">
+                <span class="pill">Apple-style study dashboard</span>
+                <h2>Study from pages, not typing.</h2>
                 <p>
-                    Generate notes, build flashcards, track your streaks, and grow your learning dashboard.
+                    Upload a worksheet, textbook page, PDF, or handwritten note.
+                    StudySnap turns it into clean notes, flashcards, and quizzes.
                 </p>
 
-                <div class="auth-preview">
-                    <div>
-                        <span>Study XP</span>
+                <div class="preview-row">
+                    <div class="mini-preview">
+                        <span>XP</span>
                         <strong>0</strong>
                     </div>
-                    <div>
-                        <span>Flashcards</span>
+
+                    <div class="mini-preview">
+                        <span>Cards</span>
                         <strong>0</strong>
                     </div>
-                    <div>
+
+                    <div class="mini-preview">
                         <span>Streak</span>
                         <strong>0</strong>
                     </div>
                 </div>
             </div>
 
-            <div class="auth-panel glass-inner">
-                <div class="form-tabs">
-                    <button class="form-tab active" data-auth-tab="login">Login</button>
-                    <button class="form-tab" data-auth-tab="signup">Sign Up</button>
+            <div class="auth-right glass-soft">
+                <div class="auth-tabs">
+                    <button class="auth-tab active" data-auth-tab="login">Login</button>
+                    <button class="auth-tab" data-auth-tab="signup">Sign Up</button>
                 </div>
 
                 <form id="loginForm" class="auth-form">
                     <label>
                         Email
-                        <input type="email" id="loginEmail" placeholder="you@example.com" required>
+                        <input id="loginEmail" type="email" placeholder="you@example.com" required />
                     </label>
 
                     <label>
                         Password
-                        <input type="password" id="loginPassword" placeholder="Enter password" required>
+                        <input id="loginPassword" type="password" placeholder="Your password" required />
                     </label>
 
-                    <button type="submit" class="primary-btn">Login</button>
-                    <p class="form-message" id="loginMessage"></p>
+                    <button class="primary-btn" type="submit">Login</button>
                 </form>
 
                 <form id="signupForm" class="auth-form hidden">
                     <label>
-                        Name
-                        <input type="text" id="signupName" placeholder="Your name" required>
+                        Display Name
+                        <input id="signupName" type="text" placeholder="Husnain" required />
                     </label>
 
                     <label>
                         Email
-                        <input type="email" id="signupEmail" placeholder="you@example.com" required>
+                        <input id="signupEmail" type="email" placeholder="you@example.com" required />
                     </label>
 
                     <label>
                         Password
-                        <input type="password" id="signupPassword" placeholder="Create password" required>
+                        <input id="signupPassword" type="password" placeholder="Create password" required />
                     </label>
 
-                    <button type="submit" class="primary-btn">Create Account</button>
-                    <p class="form-message" id="signupMessage"></p>
+                    <button class="primary-btn" type="submit">Create Account</button>
                 </form>
 
-                <p class="security-note">
-                    Prototype login is saved locally in your browser for now.
+                <p class="small-note">
+                    Real backend uses Supabase Auth. Add your Supabase URL and anon key in <strong>script.js</strong>.
                 </p>
             </div>
         </div>
     </section>
 
-    <div id="appView" class="app hidden">
+    <section id="appScreen" class="app-screen hidden">
 
-        <aside class="sidebar glass-panel">
-            <div class="side-logo" data-goto="dashboard">
+        <aside class="sidebar glass">
+            <button class="logo-btn" data-page="dashboard">
                 <span>S</span>
-            </div>
+            </button>
 
-            <nav class="side-nav">
-                <button class="nav-link active" data-page="dashboard" title="Dashboard">
-                    <span>⌂</span>
-                </button>
-
-                <button class="nav-link" data-page="notes" title="AI Notes">
-                    <span>✦</span>
-                </button>
-
-                <button class="nav-link" data-page="flashcards" title="Flashcards">
-                    <span>▣</span>
-                </button>
-
-                <button class="nav-link" data-page="quizzes" title="Quizzes">
-                    <span>◎</span>
-                </button>
-
-                <button class="nav-link" data-page="rewards" title="Rewards">
-                    <span>★</span>
-                </button>
-
-                <button class="nav-link" data-page="progress" title="Progress">
-                    <span>▥</span>
-                </button>
-
-                <button class="nav-link" data-page="settings" title="Settings">
-                    <span>⚙</span>
-                </button>
+            <nav>
+                <button class="nav-btn active" data-page="dashboard" title="Dashboard">⌂</button>
+                <button class="nav-btn" data-page="generate" title="Generate Notes">✦</button>
+                <button class="nav-btn" data-page="flashcards" title="Flashcards">▣</button>
+                <button class="nav-btn" data-page="quiz" title="Quiz">◎</button>
+                <button class="nav-btn" data-page="rewards" title="Rewards">★</button>
+                <button class="nav-btn" data-page="settings" title="Settings">⚙</button>
             </nav>
 
-            <button id="sideThemeToggle" class="nav-link theme-button" title="Theme">
-                <span>☾</span>
-            </button>
+            <button id="sidebarThemeBtn" class="nav-btn bottom-btn" title="Theme">☾</button>
         </aside>
 
-        <main class="workspace">
+        <main class="main">
+
             <header class="topbar">
-                <div class="product-title">
-                    <div class="mini-mark">S</div>
+                <div class="product">
+                    <div class="product-icon">S</div>
                     <div>
-                        <strong>StudySnap</strong>
-                        <span>Learn smarter. Remember longer.</span>
+                        <h1>StudySnap</h1>
+                        <p>Learn smarter. Remember longer.</p>
                     </div>
                 </div>
 
                 <div class="top-actions">
-                    <button id="notificationButton" class="icon-btn">🔔</button>
-                    <button id="themeToggle" class="icon-btn">☀</button>
-                    <button id="profileButton" class="profile-pill">
-                        <span id="profileInitial">H</span>
-                    </button>
+                    <button id="notifyBtn" class="icon-btn">🔔</button>
+                    <button id="themeBtn" class="icon-btn">☀</button>
+                    <button id="profileBtn" class="avatar-btn">H</button>
                 </div>
             </header>
 
-            <section class="page active" data-page-panel="dashboard">
-                <div class="page-heading">
-                    <span class="eyebrow">My Dashboard</span>
-                    <h1 id="dashboardGreeting">Welcome back.</h1>
-                    <p>Your new StudySnap account is ready. Start your first session to build progress.</p>
+            <section class="page active" data-page="dashboard">
+                <div class="headline">
+                    <span class="pill">Dashboard</span>
+                    <h2 id="welcomeTitle">Welcome back.</h2>
+                    <p>Fresh account. Everything starts from zero. Upload your first page to begin.</p>
                 </div>
 
-                <div class="dashboard-layout">
-                    <article class="welcome-card glass-panel tilt-card">
-                        <div class="welcome-top">
-                            <div class="hero-orb">👋</div>
-                            <button class="more-btn">•••</button>
+                <div class="dashboard-grid">
+                    <article class="hero-card glass">
+                        <div class="hero-top">
+                            <div class="hero-bubble">👋</div>
+                            <button class="ghost-btn" data-page="generate">Upload Page</button>
                         </div>
 
-                        <h2>Fresh start.</h2>
-                        <p>All progress begins at zero. Upload notes, create flashcards, and earn your first XP.</p>
+                        <h3>Ready to study?</h3>
+                        <p>
+                            Generate your first AI notes from a page, then turn them into flashcards and quizzes.
+                        </p>
 
-                        <div class="mini-stats">
-                            <div class="mini-card glass-inner">
+                        <div class="metric-grid">
+                            <div class="metric glass-soft">
                                 <span>🔥</span>
                                 <small>Streak</small>
-                                <strong id="dashStreak">0</strong>
+                                <strong id="streakValue">0</strong>
                                 <p>days</p>
                             </div>
 
-                            <div class="mini-card glass-inner">
+                            <div class="metric glass-soft">
                                 <span>⚡</span>
-                                <small>Today XP</small>
-                                <strong id="dashXP">0</strong>
+                                <small>XP</small>
+                                <strong id="xpValue">0</strong>
                                 <p>earned</p>
                             </div>
 
-                            <div class="mini-card glass-inner">
-                                <span>🎯</span>
-                                <small>Goals</small>
-                                <strong id="dashGoals">0/0</strong>
-                                <p>completed</p>
+                            <div class="metric glass-soft">
+                                <span>🧠</span>
+                                <small>Flashcards</small>
+                                <strong id="cardsValue">0</strong>
+                                <p>created</p>
                             </div>
 
-                            <div class="mini-card glass-inner">
-                                <span>⭐</span>
-                                <small>Cards</small>
-                                <strong id="dashCards">0</strong>
-                                <p>reviewed</p>
+                            <div class="metric glass-soft">
+                                <span>🎁</span>
+                                <small>Trophies</small>
+                                <strong id="trophyValue">0</strong>
+                                <p>packs</p>
                             </div>
                         </div>
                     </article>
 
-                    <aside class="profile-card glass-panel">
-                        <div class="profile-avatar" id="bigProfileInitial">H</div>
+                    <article class="profile-card glass">
+                        <div id="bigAvatar" class="big-avatar">H</div>
                         <h3 id="profileName">Student</h3>
-                        <p>Free Member</p>
+                        <p>Free Plan</p>
 
                         <div class="level-row">
                             <span>Level 0</span>
-                            <span id="levelXP">0 / 500 XP</span>
+                            <span id="levelText">0 / 500 XP</span>
                         </div>
 
                         <div class="progress-track">
-                            <div id="levelBar" class="progress-fill"></div>
+                            <div id="levelFill" class="progress-fill"></div>
                         </div>
 
-                        <button class="secondary-btn" data-goto="settings">Open Settings</button>
-                    </aside>
-                </div>
-
-                <div class="stats-grid">
-                    <article class="stat glass-panel">
-                        <span class="stat-icon blue">⏱</span>
-                        <p>Study Hours</p>
-                        <h3 id="studyHours">0.0</h3>
-                    </article>
-
-                    <article class="stat glass-panel">
-                        <span class="stat-icon purple">📝</span>
-                        <p>Notes Created</p>
-                        <h3 id="notesCount">0</h3>
-                    </article>
-
-                    <article class="stat glass-panel">
-                        <span class="stat-icon green">🧠</span>
-                        <p>Quizzes Taken</p>
-                        <h3 id="quizzesCount">0</h3>
-                    </article>
-
-                    <article class="stat glass-panel">
-                        <span class="stat-icon orange">🎁</span>
-                        <p>Trophies</p>
-                        <h3 id="trophiesCount">0</h3>
+                        <button class="secondary-btn" data-page="settings">Settings</button>
                     </article>
                 </div>
 
-                <div class="lower-grid">
-                    <article class="glass-panel action-panel">
-                        <div class="section-title">
+                <div class="wide-grid">
+                    <article class="glass panel">
+                        <div class="panel-title">
                             <h3>Quick Actions</h3>
-                            <span>Start building progress</span>
+                            <p>Start here</p>
                         </div>
 
-                        <div class="quick-grid">
-                            <button class="quick-action" data-goto="notes">
+                        <div class="actions-grid">
+                            <button class="action-btn" data-page="generate">
                                 <span>✦</span>
                                 Generate Notes
                             </button>
 
-                            <button class="quick-action" data-goto="flashcards">
+                            <button class="action-btn" data-page="flashcards">
                                 <span>▣</span>
-                                Create Flashcards
+                                Study Flashcards
                             </button>
 
-                            <button class="quick-action" data-goto="quizzes">
+                            <button class="action-btn" data-page="quiz">
                                 <span>◎</span>
                                 Take Quiz
                             </button>
 
-                            <button class="quick-action" id="completeSessionButton">
+                            <button id="completeSessionBtn" class="action-btn">
                                 <span>✓</span>
                                 Complete Session
                             </button>
                         </div>
                     </article>
 
-                    <article class="glass-panel activity-panel">
-                        <div class="section-title">
+                    <article class="glass panel">
+                        <div class="panel-title">
                             <h3>Recent Activity</h3>
-                            <span id="activityCount">0 events</span>
+                            <p id="activityCount">0 events</p>
                         </div>
 
                         <div id="activityList" class="activity-list">
-                            <p class="empty-text">No activity yet.</p>
+                            <p class="empty">No activity yet.</p>
                         </div>
                     </article>
                 </div>
             </section>
 
-            <section class="page" data-page-panel="notes">
-                <div class="page-heading">
-                    <span class="eyebrow">AI Notes</span>
-                    <h1>Generate study notes.</h1>
-                    <p>Paste lesson text for now. Image/PDF AI upload will come later with real backend AI.</p>
+            <section class="page" data-page="generate">
+                <div class="headline">
+                    <span class="pill">AI Notes</span>
+                    <h2>Generate from a page.</h2>
+                    <p>Upload a photo, worksheet image, or PDF. The backend reads it and creates notes.</p>
                 </div>
 
-                <div class="tool-grid">
-                    <article class="glass-panel tool-card">
-                        <h3>Input Material</h3>
+                <div class="generate-grid">
+                    <article class="glass panel">
+                        <h3>Upload Study Page</h3>
 
-                        <label class="upload-box">
-                            <input id="fileInput" type="file" accept="image/*,.pdf">
+                        <label class="upload-zone" for="fileInput">
+                            <input id="fileInput" type="file" accept="image/*,.pdf" />
                             <span>＋</span>
-                            <strong>Upload photo or PDF</strong>
-                            <small id="fileName">Optional for now</small>
+                            <strong id="uploadTitle">Choose photo or PDF</strong>
+                            <p id="uploadSub">PNG, JPG, WEBP, or PDF</p>
                         </label>
 
                         <label>
-                            Focus Mode
-                            <select id="focusMode">
+                            Focus
+                            <select id="focusSelect">
                                 <option value="everything">Focus on everything</option>
-                                <option value="summary">Summary</option>
-                                <option value="definitions">Definitions</option>
                                 <option value="exam">Exam preparation</option>
-                                <option value="key">Key points</option>
+                                <option value="definitions">Definitions</option>
+                                <option value="key-points">Key points only</option>
+                                <option value="simple">Explain simply</option>
                             </select>
                         </label>
 
-                        <label>
-                            Paste your notes
-                            <textarea id="materialInput" placeholder="Paste your lesson, textbook paragraph, or class notes here..."></textarea>
-                        </label>
+                        <button id="generateBtn" class="primary-btn">
+                            Generate Notes From Page
+                        </button>
 
-                        <button id="generateNotesButton" class="primary-btn">Generate Notes</button>
+                        <div id="generateStatus" class="status-box">
+                            Waiting for upload.
+                        </div>
                     </article>
 
-                    <article class="glass-panel tool-card">
-                        <h3>Generated Notes</h3>
-                        <div id="notesOutput" class="output-box">
-                            Your notes will appear here.
+                    <article class="glass panel output-panel">
+                        <div class="panel-title">
+                            <h3>Generated Notes</h3>
+                            <button id="saveCardsBtn" class="secondary-btn">Make Flashcards</button>
+                        </div>
+
+                        <div id="notesOutput" class="notes-output">
+                            Your notes will appear here after generation.
                         </div>
                     </article>
                 </div>
             </section>
 
-            <section class="page" data-page-panel="flashcards">
-                <div class="page-heading">
-                    <span class="eyebrow">Flashcards</span>
-                    <h1>Review smarter.</h1>
-                    <p>Create cards from your generated notes and flip them to study.</p>
+            <section class="page" data-page="flashcards">
+                <div class="headline">
+                    <span class="pill">Flashcards</span>
+                    <h2>Practice memory.</h2>
+                    <p>Cards are generated from your latest AI notes.</p>
                 </div>
 
-                <div class="tool-grid">
-                    <article class="glass-panel tool-card">
-                        <h3>Flashcard Controls</h3>
-                        <button id="createCardsButton" class="primary-btn">Create Cards From Latest Note</button>
-                        <button id="resetCardsButton" class="secondary-btn">Clear Flashcards</button>
+                <div class="study-grid">
+                    <article class="glass panel">
+                        <h3>Controls</h3>
+                        <p class="muted" id="cardCountText">0 cards available.</p>
 
-                        <div class="hint-box">
-                            <strong id="cardCounter">0 cards</strong>
-                            <span>Cards are stored in your local StudySnap account.</span>
-                        </div>
+                        <button id="nextCardBtn" class="primary-btn">Next Card</button>
+                        <button id="resetCardsBtn" class="secondary-btn">Clear Cards</button>
                     </article>
 
-                    <article class="flashcard glass-panel" id="flashcard">
-                        <span id="flashLabel">No card yet</span>
-                        <h2 id="flashQuestion">Create flashcards first.</h2>
-                        <p id="flashAnswer">Your answer will show here.</p>
+                    <article id="flashcard" class="flashcard glass">
+                        <span id="flashLabel">No flashcard</span>
+                        <h3 id="flashQuestion">Generate notes first.</h3>
+                        <p id="flashAnswer">The answer will show after you flip.</p>
 
-                        <div class="card-actions">
-                            <button id="flipCardButton" class="secondary-btn">Flip</button>
-                            <button id="wrongCardButton" class="secondary-btn">Wrong</button>
-                            <button id="rightCardButton" class="primary-btn">Correct</button>
+                        <div class="row-buttons">
+                            <button id="flipBtn" class="secondary-btn">Flip</button>
+                            <button id="wrongBtn" class="secondary-btn">Wrong</button>
+                            <button id="correctBtn" class="primary-btn">Correct</button>
                         </div>
 
-                        <div id="wrongExplain" class="explain-box hidden"></div>
+                        <div id="wrongBox" class="feedback hidden"></div>
                     </article>
                 </div>
             </section>
 
-            <section class="page" data-page-panel="quizzes">
-                <div class="page-heading">
-                    <span class="eyebrow">Quizzes</span>
-                    <h1>Test your memory.</h1>
-                    <p>Answer questions created from your flashcards.</p>
+            <section class="page" data-page="quiz">
+                <div class="headline">
+                    <span class="pill">Quiz</span>
+                    <h2>Test yourself.</h2>
+                    <p>The quiz uses your flashcards.</p>
                 </div>
 
-                <article class="glass-panel quiz-card">
-                    <div class="section-title">
+                <article class="glass panel quiz-panel">
+                    <div class="panel-title">
                         <h3 id="quizTitle">Quiz not started</h3>
-                        <span id="quizProgress">0 / 0</span>
+                        <p id="quizProgress">0 / 0</p>
                     </div>
 
-                    <p id="quizQuestion" class="quiz-question">Create flashcards first, then start a quiz.</p>
+                    <p id="quizQuestion" class="quiz-question">Generate flashcards first.</p>
 
-                    <input id="quizAnswer" type="text" placeholder="Type your answer here">
+                    <input id="quizInput" type="text" placeholder="Type your answer..." />
 
-                    <div class="card-actions">
-                        <button id="startQuizButton" class="secondary-btn">Start Quiz</button>
-                        <button id="submitQuizButton" class="primary-btn">Submit Answer</button>
+                    <div class="row-buttons">
+                        <button id="startQuizBtn" class="secondary-btn">Start Quiz</button>
+                        <button id="submitQuizBtn" class="primary-btn">Submit</button>
                     </div>
 
-                    <div id="quizFeedback" class="explain-box hidden"></div>
+                    <div id="quizFeedback" class="feedback hidden"></div>
                 </article>
             </section>
 
-            <section class="page" data-page-panel="rewards">
-                <div class="page-heading">
-                    <span class="eyebrow">Rewards</span>
-                    <h1>Open packs.</h1>
-                    <p>Earn trophies from study sessions, then open packs for bonuses.</p>
+            <section class="page" data-page="rewards">
+                <div class="headline">
+                    <span class="pill">Rewards</span>
+                    <h2>Open packs.</h2>
+                    <p>Earn trophies by completing study sessions and quizzes.</p>
                 </div>
 
-                <div class="rewards-grid">
-                    <article class="pack glass-panel">
+                <div class="packs-grid">
+                    <article class="pack glass">
                         <span>🎁</span>
                         <h3>Starter Pack</h3>
-                        <p>Costs 1 trophy. Gives XP, credits, or flashcard boosts.</p>
-                        <button class="primary-btn" data-pack="starter">Open Pack</button>
+                        <p>Costs 1 trophy. Can give XP, AI credits, or bonus rewards.</p>
+                        <button id="openPackBtn" class="primary-btn">Open Pack</button>
                     </article>
 
-                    <article class="pack glass-panel">
-                        <span>💎</span>
-                        <h3>Premium Pack</h3>
-                        <p>Coming later with Pro cosmetics and rare rewards.</p>
-                        <button class="secondary-btn" disabled>Coming Soon</button>
-                    </article>
-
-                    <article class="pack glass-panel">
+                    <article class="pack glass locked">
                         <span>🌌</span>
                         <h3>Theme Pack</h3>
-                        <p>Unlock future themes for your StudySnap dashboard.</p>
+                        <p>Unlock premium dashboard themes later.</p>
+                        <button class="secondary-btn" disabled>Coming Soon</button>
+                    </article>
+
+                    <article class="pack glass locked">
+                        <span>👑</span>
+                        <h3>Pro Pack</h3>
+                        <p>Future subscription rewards and cosmetics.</p>
                         <button class="secondary-btn" disabled>Coming Soon</button>
                     </article>
                 </div>
             </section>
 
-            <section class="page" data-page-panel="progress">
-                <div class="page-heading">
-                    <span class="eyebrow">Progress</span>
-                    <h1>Your learning progress.</h1>
-                    <p>Track your study journey as you use StudySnap.</p>
-                </div>
-
-                <article class="glass-panel progress-panel">
-                    <div class="section-title">
-                        <h3>Progress Overview</h3>
-                        <span>New account</span>
-                    </div>
-
-                    <div class="progress-list">
-                        <div>
-                            <span>Notes</span>
-                            <div class="progress-track"><div id="progressNotes" class="progress-fill"></div></div>
-                        </div>
-
-                        <div>
-                            <span>Flashcards</span>
-                            <div class="progress-track"><div id="progressCards" class="progress-fill"></div></div>
-                        </div>
-
-                        <div>
-                            <span>XP</span>
-                            <div class="progress-track"><div id="progressXP" class="progress-fill"></div></div>
-                        </div>
-                    </div>
-                </article>
-            </section>
-
-            <section class="page" data-page-panel="settings">
-                <div class="page-heading">
-                    <span class="eyebrow">Settings</span>
-                    <h1>Customize StudySnap.</h1>
-                    <p>Change your name, theme, or reset prototype data.</p>
+            <section class="page" data-page="settings">
+                <div class="headline">
+                    <span class="pill">Settings</span>
+                    <h2>Customize StudySnap.</h2>
+                    <p>Change profile settings, theme, and account options.</p>
                 </div>
 
                 <div class="settings-grid">
-                    <article class="glass-panel tool-card">
+                    <article class="glass panel">
                         <h3>Profile</h3>
 
                         <label>
                             Display Name
-                            <input id="settingsName" type="text" placeholder="Your name">
+                            <input id="settingsName" type="text" placeholder="Your name" />
                         </label>
 
-                        <button id="saveSettingsButton" class="primary-btn">Save Settings</button>
+                        <button id="saveSettingsBtn" class="primary-btn">Save Profile</button>
                     </article>
 
-                    <article class="glass-panel tool-card">
-                        <h3>Appearance</h3>
+                    <article class="glass panel">
+                        <h3>Account</h3>
 
-                        <button id="settingsThemeButton" class="secondary-btn">Switch Theme</button>
-                        <button id="resetAccountButton" class="danger-btn">Reset Account Data</button>
-                        <button id="logoutButton" class="secondary-btn">Logout</button>
+                        <button id="settingsThemeBtn" class="secondary-btn">Switch Theme</button>
+                        <button id="logoutBtn" class="secondary-btn">Logout</button>
                     </article>
                 </div>
             </section>
-        </main>
-    </div>
 
-    <div id="toast" class="toast hidden"></div>
+        </main>
+    </section>
 
     <script src="script.js"></script>
 </body>
