@@ -1,789 +1,632 @@
 const SUPABASE_URL = "https://xhjaktuuzyajccmchwpf.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhoamFrdHV1enlhamNjbWNod3BmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI1NTcyMTgsImV4cCI6MjA5ODEzMzIxOH0.13fQJjemyB5us_KQ1NPlQqpXsiJ5vObMTS2dfr4YVRw";
+const SUPABASE_ANON_KEY = "PASTE_YOUR_NEW_LEGACY_ANON_PUBLIC_KEY_HERE";
 
-const isSupabaseReady =
-    SUPABASE_URL.startsWith("https://") &&
-    !SUPABASE_URL.includes("PASTE") &&
-    !SUPABASE_ANON_KEY.includes("PASTE");
-
-const supabaseClient = isSupabaseReady
-    ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
-    : null;
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const state = {
-    user: null,
-    profile: null,
-    notes: [],
-    flashcards: [],
-    activities: [],
-    latestNote: null,
-    currentCardIndex: 0,
-    flipped: false,
-    quizActive: false,
-    quizIndex: 0,
-    quizScore: 0,
-    selectedFile: null
+  user: null,
+  profile: null,
+  notes: [],
+  activities: [],
+  achievements: [],
+  flashcards: [],
+  selectedFile: null,
+  activeNote: null,
+  currentCard: null
 };
 
-const els = {
-    authScreen: document.getElementById("authScreen"),
-    appScreen: document.getElementById("appScreen"),
-    toast: document.getElementById("toast"),
+const $ = id => document.getElementById(id);
 
-    loginForm: document.getElementById("loginForm"),
-    signupForm: document.getElementById("signupForm"),
-
-    welcomeTitle: document.getElementById("welcomeTitle"),
-    profileBtn: document.getElementById("profileBtn"),
-    profileName: document.getElementById("profileName"),
-    bigAvatar: document.getElementById("bigAvatar"),
-
-    streakValue: document.getElementById("streakValue"),
-    xpValue: document.getElementById("xpValue"),
-    cardsValue: document.getElementById("cardsValue"),
-    trophyValue: document.getElementById("trophyValue"),
-    levelText: document.getElementById("levelText"),
-    levelFill: document.getElementById("levelFill"),
-
-    activityList: document.getElementById("activityList"),
-    activityCount: document.getElementById("activityCount"),
-
-    fileInput: document.getElementById("fileInput"),
-    uploadTitle: document.getElementById("uploadTitle"),
-    uploadSub: document.getElementById("uploadSub"),
-    focusSelect: document.getElementById("focusSelect"),
-    generateBtn: document.getElementById("generateBtn"),
-    generateStatus: document.getElementById("generateStatus"),
-    notesOutput: document.getElementById("notesOutput"),
-
-    cardCountText: document.getElementById("cardCountText"),
-    flashLabel: document.getElementById("flashLabel"),
-    flashQuestion: document.getElementById("flashQuestion"),
-    flashAnswer: document.getElementById("flashAnswer"),
-    wrongBox: document.getElementById("wrongBox"),
-
-    quizTitle: document.getElementById("quizTitle"),
-    quizProgress: document.getElementById("quizProgress"),
-    quizQuestion: document.getElementById("quizQuestion"),
-    quizInput: document.getElementById("quizInput"),
-    quizFeedback: document.getElementById("quizFeedback"),
-
-    settingsName: document.getElementById("settingsName")
-};
-
-function toast(message) {
-    els.toast.textContent = message;
-    els.toast.classList.remove("hidden");
-
-    clearTimeout(window.__toastTimer);
-
-    window.__toastTimer = setTimeout(() => {
-        els.toast.classList.add("hidden");
-    }, 2600);
+function toast(msg) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 3000);
 }
 
-function setTheme(theme) {
-    document.body.dataset.theme = theme;
-    localStorage.setItem("studysnap_theme", theme);
-
-    document.getElementById("themeBtn").textContent = theme === "dark" ? "☀" : "☾";
-    document.getElementById("sidebarThemeBtn").textContent = theme === "dark" ? "☾" : "☀";
+function safe(str = "") {
+  return String(str)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
-function toggleTheme() {
-    const current = document.body.dataset.theme || "dark";
-    setTheme(current === "dark" ? "light" : "dark");
+function switchAuth(mode) {
+  const signup = mode === "signup";
+  $("loginTab").classList.toggle("active", !signup);
+  $("signupTab").classList.toggle("active", signup);
+  $("loginForm").classList.toggle("hidden", signup);
+  $("signupForm").classList.toggle("hidden", !signup);
 }
 
-function showPage(page) {
-    document.querySelectorAll(".page").forEach((panel) => {
-        panel.classList.toggle("active", panel.dataset.page === page);
-    });
+async function signUp(e) {
+  e.preventDefault();
 
-    document.querySelectorAll(".nav-btn").forEach((button) => {
-        button.classList.toggle("active", button.dataset.page === page);
-    });
+  const name = $("signupName").value.trim();
+  const email = $("signupEmail").value.trim();
+  const password = $("signupPassword").value;
 
-    if (page === "settings" && state.profile) {
-        els.settingsName.value = state.profile.display_name || "";
-    }
+  const { error } = await supabaseClient.auth.signUp({
+    email,
+    password,
+    options: { data: { display_name: name } }
+  });
 
-    window.scrollTo({ top: 0, behavior: "smooth" });
+  if (error) return toast(error.message);
+
+  toast("Account created. Check your email.");
+  switchAuth("login");
 }
 
-function showApp() {
-    els.authScreen.classList.add("hidden");
-    els.appScreen.classList.remove("hidden");
-}
+async function login(e) {
+  e.preventDefault();
 
-function showAuth() {
-    els.appScreen.classList.add("hidden");
-    els.authScreen.classList.remove("hidden");
-}
+  const { data, error } = await supabaseClient.auth.signInWithPassword({
+    email: $("loginEmail").value.trim(),
+    password: $("loginPassword").value
+  });
 
-async function init() {
-    setTheme(localStorage.getItem("studysnap_theme") || "dark");
+  if (error) return toast(error.message);
 
-    bindEvents();
-
-    if (!isSupabaseReady) {
-        toast("Supabase is not connected yet. Add your Supabase URL and anon key in script.js.");
-        showAuth();
-        return;
-    }
-
-    const { data } = await supabaseClient.auth.getSession();
-
-    if (data.session?.user) {
-        state.user = data.session.user;
-        await loadUserData();
-        showApp();
-        render();
-    } else {
-        showAuth();
-    }
-
-    supabaseClient.auth.onAuthStateChange(async (_event, session) => {
-        state.user = session?.user || null;
-
-        if (state.user) {
-            await loadUserData();
-            showApp();
-            render();
-        } else {
-            showAuth();
-        }
-    });
-}
-
-function bindEvents() {
-    document.querySelectorAll("[data-auth-tab]").forEach((button) => {
-        button.addEventListener("click", () => {
-            document.querySelectorAll("[data-auth-tab]").forEach((tab) => {
-                tab.classList.remove("active");
-            });
-
-            button.classList.add("active");
-
-            const tab = button.dataset.authTab;
-            els.loginForm.classList.toggle("hidden", tab !== "login");
-            els.signupForm.classList.toggle("hidden", tab !== "signup");
-        });
-    });
-
-    document.querySelectorAll("[data-page]").forEach((button) => {
-        button.addEventListener("click", () => {
-            showPage(button.dataset.page);
-        });
-    });
-
-    document.getElementById("themeBtn").addEventListener("click", toggleTheme);
-    document.getElementById("sidebarThemeBtn").addEventListener("click", toggleTheme);
-    document.getElementById("settingsThemeBtn").addEventListener("click", toggleTheme);
-
-    document.getElementById("notifyBtn").addEventListener("click", () => {
-        toast("No notifications yet.");
-    });
-
-    document.getElementById("profileBtn").addEventListener("click", () => {
-        showPage("settings");
-    });
-
-    els.loginForm.addEventListener("submit", handleLogin);
-    els.signupForm.addEventListener("submit", handleSignup);
-
-    els.fileInput.addEventListener("change", handleFileSelect);
-    els.generateBtn.addEventListener("click", generateNotesFromPage);
-
-    document.getElementById("saveCardsBtn").addEventListener("click", makeFlashcardsFromLatestNote);
-    document.getElementById("nextCardBtn").addEventListener("click", nextCard);
-    document.getElementById("flipBtn").addEventListener("click", flipCard);
-    document.getElementById("correctBtn").addEventListener("click", markCardCorrect);
-    document.getElementById("wrongBtn").addEventListener("click", markCardWrong);
-    document.getElementById("resetCardsBtn").addEventListener("click", clearCards);
-
-    document.getElementById("startQuizBtn").addEventListener("click", startQuiz);
-    document.getElementById("submitQuizBtn").addEventListener("click", submitQuizAnswer);
-
-    document.getElementById("completeSessionBtn").addEventListener("click", completeStudySession);
-    document.getElementById("openPackBtn").addEventListener("click", openPack);
-
-    document.getElementById("saveSettingsBtn").addEventListener("click", saveSettings);
-    document.getElementById("logoutBtn").addEventListener("click", logout);
-}
-
-async function handleSignup(event) {
-    event.preventDefault();
-
-    if (!isSupabaseReady) {
-        toast("Connect Supabase first.");
-        return;
-    }
-
-    const displayName = document.getElementById("signupName").value.trim();
-    const email = document.getElementById("signupEmail").value.trim();
-    const password = document.getElementById("signupPassword").value;
-
-    const { error } = await supabaseClient.auth.signUp({
-        email,
-        password,
-        options: {
-            data: {
-                display_name: displayName
-            }
-        }
-    });
-
-    if (error) {
-        toast(error.message);
-        return;
-    }
-
-    toast("Account created. Check email if confirmation is enabled.");
-}
-
-async function handleLogin(event) {
-    event.preventDefault();
-
-    if (!isSupabaseReady) {
-        toast("Connect Supabase first.");
-        return;
-    }
-
-    const email = document.getElementById("loginEmail").value.trim();
-    const password = document.getElementById("loginPassword").value;
-
-    const { error } = await supabaseClient.auth.signInWithPassword({
-        email,
-        password
-    });
-
-    if (error) {
-        toast(error.message);
-        return;
-    }
-
-    toast("Logged in.");
+  state.user = data.user;
+  await enterApp();
 }
 
 async function logout() {
-    await supabaseClient.auth.signOut();
-    toast("Logged out.");
+  await supabaseClient.auth.signOut();
+  state.user = null;
+  $("appScreen").classList.add("hidden");
+  $("authScreen").classList.remove("hidden");
 }
 
-async function loadUserData() {
-    if (!state.user) return;
+async function ensureProfile() {
+  const { data } = await supabaseClient
+    .from("profiles")
+    .select("*")
+    .eq("id", state.user.id)
+    .maybeSingle();
 
-    let { data: profile, error: profileError } = await supabaseClient
-        .from("profiles")
-        .select("*")
-        .eq("id", state.user.id)
-        .single();
+  if (data) return data;
 
-    if (profileError || !profile) {
-        const fallbackName =
-            state.user.user_metadata?.display_name ||
-            state.user.email?.split("@")[0] ||
-            "Student";
+  const name = state.user.user_metadata?.display_name || state.user.email.split("@")[0];
 
-        const { data: insertedProfile } = await supabaseClient
-            .from("profiles")
-            .insert({
-                id: state.user.id,
-                display_name: fallbackName
-            })
-            .select()
-            .single();
+  const { data: created, error } = await supabaseClient
+    .from("profiles")
+    .insert({
+      id: state.user.id,
+      display_name: name,
+      xp: 0,
+      level: 1,
+      streak: 0,
+      trophies: 0,
+      starter_packs: 1,
+      ai_credits: 5,
+      study_hours: 0,
+      cards_reviewed: 0,
+      quizzes_taken: 0,
+      theme: "dark"
+    })
+    .select()
+    .single();
 
-        profile = insertedProfile;
-    }
+  if (error) {
+    toast(error.message);
+    return null;
+  }
 
-    const { data: notes } = await supabaseClient
-        .from("notes")
-        .select("*")
-        .eq("user_id", state.user.id)
-        .order("created_at", { ascending: false });
+  return created;
+}
 
-    const { data: activities } = await supabaseClient
-        .from("activities")
-        .select("*")
-        .eq("user_id", state.user.id)
-        .order("created_at", { ascending: false })
-        .limit(8);
+async function loadData() {
+  state.profile = await ensureProfile();
 
-    state.profile = profile;
-    state.notes = notes || [];
-    state.activities = activities || [];
+  const [notes, activities, achievements, flashcards] = await Promise.all([
+    supabaseClient.from("notes").select("*").order("created_at", { ascending: false }).limit(30),
+    supabaseClient.from("activities").select("*").order("created_at", { ascending: false }).limit(30),
+    supabaseClient.from("user_achievements").select("*"),
+    supabaseClient.from("flashcards").select("*").order("due_at", { ascending: true }).limit(50)
+  ]);
 
-    state.latestNote = state.notes[0] || null;
-    state.flashcards = state.latestNote?.flashcards || [];
+  state.notes = notes.data || [];
+  state.activities = activities.data || [];
+  state.achievements = achievements.data || [];
+  state.flashcards = flashcards.data || [];
+}
+
+async function enterApp() {
+  $("authScreen").classList.add("hidden");
+  $("appScreen").classList.remove("hidden");
+  await loadData();
+  render();
 }
 
 function render() {
-    if (!state.profile) return;
-
-    const name = state.profile.display_name || "Student";
-    const firstName = name.split(" ")[0];
-    const initial = firstName.charAt(0).toUpperCase() || "S";
-
-    els.welcomeTitle.textContent = `Welcome back, ${firstName}.`;
-    els.profileName.textContent = name;
-    els.profileBtn.textContent = initial;
-    els.bigAvatar.textContent = initial;
-
-    const xp = state.profile.xp || 0;
-
-    els.streakValue.textContent = state.profile.streak || 0;
-    els.xpValue.textContent = xp;
-    els.cardsValue.textContent = state.flashcards.length || 0;
-    els.trophyValue.textContent = state.profile.trophies || 0;
-
-    els.levelText.textContent = `${xp} / 500 XP`;
-    els.levelFill.style.width = `${Math.min((xp / 500) * 100, 100)}%`;
-
-    renderActivities();
-    renderNotes();
-    renderFlashcard();
-    renderQuiz();
+  renderProfile();
+  renderNotes();
+  renderActivities();
+  renderAchievements();
+  renderFlashcards();
 }
 
-function renderActivities() {
-    els.activityCount.textContent = `${state.activities.length} events`;
+function renderProfile() {
+  const p = state.profile || {};
+  const level = Math.max(1, Math.floor((p.xp || 0) / 500) + 1);
 
-    if (!state.activities.length) {
-        els.activityList.innerHTML = `<p class="empty">No activity yet.</p>`;
-        return;
-    }
+  $("welcomeTitle").textContent = Welcome back, ${p.display_name || "Student"}.;
+  $("logoutBtn").textContent = (p.display_name || "S")[0].toUpperCase();
 
-    els.activityList.innerHTML = state.activities.map((item) => {
-        return `
-            <div class="activity-item">
-                <strong>${escapeHTML(item.title)}</strong>
-                <span>${new Date(item.created_at).toLocaleString()}</span>
-            </div>
-        `;
-    }).join("");
+  $("xp").textContent = p.xp || 0;
+  $("level").textContent = Level ${level};
+  $("credits").textContent = p.ai_credits || 0;
+  $("noteCount").textContent = state.notes.length;
+  $("cardCount").textContent = state.flashcards.length;
+
+  $("trophies").textContent = p.trophies || 0;
+  $("packs").textContent = p.starter_packs || 0;
+  $("streak").textContent = p.streak || 0;
+
+  $("packOwned").textContent = p.starter_packs || 0;
+  $("studyHours").textContent = ${Number(p.study_hours || 0).toFixed(1)}h;
+  $("reviewed").textContent = p.cards_reviewed || 0;
+  $("quizzes").textContent = p.quizzes_taken || 0;
+  $("statTrophies").textContent = p.trophies || 0;
+
+  document.body.classList.toggle("light", p.theme === "light");
 }
 
 function renderNotes() {
-    if (!state.latestNote) {
-        els.notesOutput.innerHTML = "Your notes will appear here after generation.";
-        return;
-    }
+  $("recentNotes").innerHTML = state.notes.slice(0, 6).map(n => `
+    <div class="item">
+      <div>
+        <b>${safe(n.title || "Generated Notes")}</b>
+        <span>${new Date(n.created_at).toLocaleString()}</span>
+      </div>
+      <button class="ghost" onclick="openNote('${n.id}')">Open</button>
+    </div>
+  ).join("") || `<div class="item">No notes yet.</div>;
 
-    const content = state.latestNote.content || {};
-
-    els.notesOutput.innerHTML = noteToHTML(content);
+  if (state.notes[0]) {
+    state.activeNote = state.notes[0];
+    $("generatedNotes").textContent = formatContent(state.notes[0].content);
+  }
 }
 
-function noteToHTML(content) {
-    const sections = Array.isArray(content.sections) ? content.sections : [];
-    const terms = Array.isArray(content.key_terms) ? content.key_terms : [];
+function renderActivities() {
+  $("activities").innerHTML = state.activities.slice(0, 8).map(a => `
+    <div class="item">
+      <div>
+        <b>${safe(a.title)}</b>
+        <span>${new Date(a.created_at).toLocaleString()}</span>
+      </div>
+    </div>
+  ).join("") || `<div class="item">No activity yet.</div>;
+}
 
+function renderAchievements() {
+  const base = [
+    ["first_note", "🏆", "First Steps", "Create your first note"],
+    ["note_master", "📘", "Note Master", "Create 10 notes"],
+    ["streak_pro", "🔥", "Streak Pro", "Maintain a 7-day streak"],
+    ["pack_opener", "🎁", "Pack Opener", "Open a starter pack"],
+    ["xp_hunter", "⚡", "XP Hunter", "Reach 500 XP"],
+    ["card_brain", "🧠", "Card Brain", "Review 20 flashcards"]
+  ];
+
+  $("achievements").innerHTML = base.map(([code, icon, title, desc]) => {
+    const unlocked = state.achievements.some(a => a.code === code);
     return `
-        <h3>${escapeHTML(content.title || "Generated Notes")}</h3>
-
-        <h4>Summary</h4>
-        <p>${escapeHTML(content.summary || "No summary generated.")}</p>
-
-        <h4>Sections</h4>
-        ${sections.length ? sections.map((section) => `
-            <h4>${escapeHTML(section.heading || "Section")}</h4>
-            <ul>
-                ${(section.bullets || []).map((point) => `<li>${escapeHTML(point)}</li>`).join("")}
-            </ul>
-        `).join("") : "<p>No sections generated.</p>"}
-
-        <h4>Key Terms</h4>
-        ${terms.length ? `
-            <ul>
-                ${terms.map((term) => `
-                    <li><strong>${escapeHTML(term.term || "")}</strong>: ${escapeHTML(term.definition || "")}</li>
-                `).join("")}
-            </ul>
-        ` : "<p>No key terms generated.</p>"}
+      <div class="badge">
+        <div class="emoji">${icon}</div>
+        <b>${title}</b>
+        <p>${desc}</p>
+        <small>${unlocked ? "Unlocked" : "Locked"}</small>
+      </div>
     `;
+  }).join("");
 }
 
-function handleFileSelect(event) {
-    const file = event.target.files[0];
-    state.selectedFile = file || null;
+function renderFlashcards() {
+  const card = state.flashcards.find(c => new Date(c.due_at) <= new Date()) || state.flashcards[0];
+  state.currentCard = card || null;
 
-    if (!file) {
-        els.uploadTitle.textContent = "Choose photo or PDF";
-        els.uploadSub.textContent = "PNG, JPG, WEBP, or PDF";
-        return;
-    }
+  if (!card) {
+    $("flashcardBox").textContent = "No cards yet.";
+    return;
+  }
 
-    els.uploadTitle.textContent = file.name;
-    els.uploadSub.textContent = `${Math.round(file.size / 1024)} KB selected`;
-}
+  $("flashcardBox").innerHTML = `
+    <div>
+      <p>${safe(card.question)}</p>
+      <small>Click to reveal answer</small>
+    </div>
+  `;
 
-async function generateNotesFromPage() {
-    if (!isSupabaseReady) {
-        toast("Connect Supabase first.");
-        return;
-    }
-
-    if (!state.user) {
-        toast("Login first.");
-        return;
-    }
-
-    if (!state.selectedFile) {
-        toast("Upload a page or PDF first.");
-        return;
-    }
-
-    const file = state.selectedFile;
-
-    if (file.size > 10 * 1024 * 1024) {
-        toast("File too large. Keep it under 10MB for now.");
-        return;
-    }
-
-    els.generateBtn.disabled = true;
-    els.generateBtn.textContent = "Generating...";
-    els.generateStatus.textContent = "Uploading file to Supabase Storage...";
-
-    try {
-        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-        const filePath = `${state.user.id}/${Date.now()}-${safeName}`;
-
-        const { error: uploadError } = await supabaseClient
-            .storage
-            .from("study-files")
-            .upload(filePath, file, {
-                contentType: file.type,
-                upsert: false
-            });
-
-        if (uploadError) throw uploadError;
-
-        els.generateStatus.textContent = "File uploaded. AI is reading the page...";
-
-        const { data, error } = await supabaseClient.functions.invoke("generate-notes", {
-            body: {
-                filePath,
-                fileName: file.name,
-                mimeType: file.type,
-                focus: els.focusSelect.value
-            }
-        });
-
-        if (error) throw error;
-        if (data?.error) throw new Error(data.error);
-
-        els.generateStatus.textContent = "Notes generated successfully.";
-
-        await loadUserData();
-        render();
-
-        toast("+25 XP. Notes generated from page.");
-    } catch (error) {
-        console.error(error);
-        els.generateStatus.textContent = error.message || "Generation failed.";
-        toast(error.message || "Generation failed.");
-    } finally {
-        els.generateBtn.disabled = false;
-        els.generateBtn.textContent = "Generate Notes From Page";
-    }
-}
-
-async function makeFlashcardsFromLatestNote() {
-    if (!state.latestNote) {
-        toast("Generate notes first.");
-        return;
-    }
-
-    const content = state.latestNote.content || {};
-    const flashcards = Array.isArray(content.flashcards) ? content.flashcards : [];
-
-    if (!flashcards.length) {
-        toast("No flashcards were generated in the latest note.");
-        return;
-    }
-
-    const { error } = await supabaseClient
-        .from("notes")
-        .update({
-            flashcards
-        })
-        .eq("id", state.latestNote.id);
-
-    if (error) {
-        toast(error.message);
-        return;
-    }
-
-    await addActivity("Created flashcards");
-    await loadUserData();
-    render();
-    showPage("flashcards");
-    toast(`${flashcards.length} flashcards ready.`);
-}
-
-function renderFlashcard() {
-    els.wrongBox.classList.add("hidden");
-
-    if (!state.flashcards.length) {
-        els.cardCountText.textContent = "0 cards available.";
-        els.flashLabel.textContent = "No flashcard";
-        els.flashQuestion.textContent = "Generate notes first.";
-        els.flashAnswer.textContent = "The answer will show after you flip.";
-        return;
-    }
-
-    const card = state.flashcards[state.currentCardIndex % state.flashcards.length];
-
-    els.cardCountText.textContent = `${state.flashcards.length} cards available.`;
-    els.flashLabel.textContent = `Card ${state.currentCardIndex + 1} of ${state.flashcards.length}`;
-    els.flashQuestion.textContent = card.question || "Question";
-    els.flashAnswer.textContent = state.flipped ? (card.answer || "No answer.") : "Click Flip to reveal the answer.";
-}
-
-function flipCard() {
-    if (!state.flashcards.length) return;
-
-    state.flipped = !state.flipped;
-    renderFlashcard();
-}
-
-function nextCard() {
-    if (!state.flashcards.length) return;
-
-    state.currentCardIndex = (state.currentCardIndex + 1) % state.flashcards.length;
-    state.flipped = false;
-    renderFlashcard();
-}
-
-async function markCardCorrect() {
-    if (!state.flashcards.length) return;
-
-    await updateProfile({
-        cards_reviewed: (state.profile.cards_reviewed || 0) + 1,
-        xp: (state.profile.xp || 0) + 5
-    });
-
-    await addActivity("Reviewed a flashcard correctly");
-
-    nextCard();
-    await loadUserData();
-    render();
-    toast("+5 XP.");
-}
-
-function markCardWrong() {
-    if (!state.flashcards.length) return;
-
-    const card = state.flashcards[state.currentCardIndex];
-
-    els.wrongBox.innerHTML = `
-        <strong>Review tip:</strong>
-        You missed this card. Read the answer again, cover it, then explain it out loud.
-        <br><br>
-        <strong>Correct answer:</strong> ${escapeHTML(card.answer || "")}
+  $("flashcardBox").onclick = () => {
+    $("flashcardBox").innerHTML = `
+      <div>
+        <p>${safe(card.answer)}</p>
+        <small>Now rate your memory.</small>
+      </div>
     `;
-
-    els.wrongBox.classList.remove("hidden");
+  };
 }
 
-async function clearCards() {
-    if (!state.latestNote) return;
+function formatContent(c) {
+  if (!c) return "No content.";
+  if (typeof c === "string") return c;
 
-    await supabaseClient
-        .from("notes")
-        .update({ flashcards: [] })
-        .eq("id", state.latestNote.id);
+  let out = "";
+  if (c.title) out += # ${c.title}\n\n;
+  if (c.summary) out += Summary\n${c.summary}\n\n;
+  if (Array.isArray(c.key_points)) out += Key Points\n${c.key_points.map(x => `• ${x}).join("\n")}\n\n`;
+  if (Array.isArray(c.definitions)) out += Definitions\n${c.definitions.map(x => `• ${x.term}: ${x.meaning}).join("\n")}\n\n`;
+  if (Array.isArray(c.quiz)) out += Quiz\n${c.quiz.map((x,i)=>${i+1}. ${x.question}\nAnswer: ${x.answer}).join("\n\n")};
 
-    state.flashcards = [];
-    state.currentCardIndex = 0;
-    state.flipped = false;
-
-    render();
-    toast("Cards cleared.");
+  return out || JSON.stringify(c, null, 2);
 }
 
-function startQuiz() {
-    if (!state.flashcards.length) {
-        toast("Create flashcards first.");
-        return;
+window.openNote = function(id) {
+  const note = state.notes.find(n => n.id === id);
+  if (!note) return;
+
+  state.activeNote = note;
+  $("generatedNotes").textContent = formatContent(note.content);
+  $("editorTitle").value = note.title || "";
+  $("editor").innerText = formatContent(note.content);
+  goToPage("ai");
+};
+
+async function addActivity(title) {
+  await supabaseClient.from("activities").insert({ user_id: state.user.id, title });
+}
+
+async function unlock(code, title, description, icon = "🏆") {
+  if (state.achievements.some(a => a.code === code)) return;
+
+  await supabaseClient.from("user_achievements").insert({
+    user_id: state.user.id,
+    code,
+    title,
+    description,
+    icon
+  });
+}
+
+async function generateNotes() {
+  if (!state.selectedFile) return toast("Upload a study page first.");
+
+  $("generateBtn").disabled = true;
+  $("generateBtn").textContent = "Uploading...";
+
+  const file = state.selectedFile;
+  const clean = file.name.replace(/[^a-z0-9.-]/gi, "");
+  const path = ${state.user.id}/${Date.now()}-${clean};
+
+  const uploaded = await supabaseClient.storage
+    .from("study-files")
+    .upload(path, file);
+
+  if (uploaded.error) {
+    $("generateBtn").disabled = false;
+    $("generateBtn").textContent = "Generate Notes";
+    return toast(uploaded.error.message);
+  }
+
+  $("generateBtn").textContent = "Generating...";
+
+  let generated;
+  const ai = await supabaseClient.functions.invoke("generate-notes", {
+    body: {
+      filePath: path,
+      fileName: file.name,
+      mimeType: file.type,
+      focus: $("focusSelect").value
     }
+  });
 
-    state.quizActive = true;
-    state.quizIndex = 0;
-    state.quizScore = 0;
+  if (ai.error || !ai.data?.note) {
+    generated = demoNote(file.name);
+    const inserted = await supabaseClient.from("notes").insert({
+      user_id: state.user.id,
+      title: generated.title,
+      file_path: path,
+      file_name: file.name,
+      focus: $("focusSelect").value,
+      content: generated,
+      flashcards: generated.flashcards
+    }).select().single();
 
-    renderQuiz();
+    state.activeNote = inserted.data;
+    toast("Demo notes created. Deploy Edge Function for real AI.");
+  } else {
+    state.activeNote = ai.data.note;
+    toast("AI notes generated.");
+  }
+
+  await rewardStudy(file.name);
+  await loadData();
+  render();
+
+  $("generatedNotes").textContent = formatContent(state.activeNote.content || generated);
+  $("generateBtn").disabled = false;
+  $("generateBtn").textContent = "Generate Notes";
+  goToPage("ai");
 }
 
-function renderQuiz() {
-    if (!state.flashcards.length || !state.quizActive) {
-        els.quizTitle.textContent = "Quiz not started";
-        els.quizProgress.textContent = `0 / ${state.flashcards.length}`;
-        els.quizQuestion.textContent = state.flashcards.length ? "Press Start Quiz." : "Generate flashcards first.";
-        els.quizFeedback.classList.add("hidden");
-        return;
-    }
-
-    const card = state.flashcards[state.quizIndex];
-
-    els.quizTitle.textContent = "Active Quiz";
-    els.quizProgress.textContent = `${state.quizIndex + 1} / ${state.flashcards.length}`;
-    els.quizQuestion.textContent = card.question || "Question";
-    els.quizInput.value = "";
-    els.quizFeedback.classList.add("hidden");
+function demoNote(fileName) {
+  return {
+    title: Notes from ${fileName},
+    summary: "This is a clean generated study note placeholder. Deploy the Supabase Edge Function to use real GPT vision note generation.",
+    key_points: [
+      "Identify the main topic from the uploaded page.",
+      "Extract important definitions and facts.",
+      "Convert the content into reviewable flashcards.",
+      "Use quizzes to test recall."
+    ],
+    definitions: [
+      { term: "Active Recall", meaning: "Testing yourself instead of rereading." },
+      { term: "Spaced Repetition", meaning: "Reviewing information at increasing intervals." }
+    ],
+    flashcards: [
+      { question: "What is active recall?", answer: "Testing yourself to strengthen memory." },
+      { question: "What is spaced repetition?", answer: "Reviewing material over increasing time intervals." }
+    ],
+    quiz: [
+      { question: "Why are flashcards useful?", answer: "They force recall and help long-term retention." }
+    ]
+  };
 }
 
-async function submitQuizAnswer() {
-    if (!state.quizActive || !state.flashcards.length) {
-        toast("Start quiz first.");
-        return;
-    }
+async function rewardStudy(fileName) {
+  const p = state.profile;
+  const today = new Date().toISOString().slice(0, 10);
+  const last = p.last_study_date;
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
 
-    const card = state.flashcards[state.quizIndex];
-    const answer = els.quizInput.value.trim().toLowerCase();
+  let streak = p.streak || 0;
+  if (last !== today) streak = last === yesterday ? streak + 1 : 1;
 
-    const importantWords = String(card.answer || "")
-        .toLowerCase()
-        .replace(/[^\w\s]/g, "")
-        .split(/\s+/)
-        .filter((word) => word.length > 5)
-        .slice(0, 4);
+  await supabaseClient.from("profiles").update({
+    xp: (p.xp || 0) + 35,
+    level: Math.floor(((p.xp || 0) + 35) / 500) + 1,
+    streak,
+    trophies: (p.trophies || 0) + 1,
+    ai_credits: Math.max(0, (p.ai_credits || 0) - 1),
+    study_hours: Number(p.study_hours || 0) + 0.15,
+    last_study_date: today
+  }).eq("id", state.user.id);
 
-    const correct = importantWords.some((word) => answer.includes(word));
-
-    if (correct) {
-        state.quizScore += 1;
-
-        els.quizFeedback.innerHTML = `
-            <strong>Correct.</strong>
-            You included one of the important ideas.
-        `;
-    } else {
-        els.quizFeedback.innerHTML = `
-            <strong>Not quite.</strong>
-            <br><br>
-            Correct idea: ${escapeHTML(card.answer || "")}
-            <br><br>
-            Try remembering the main keyword first, then explain it in your own words.
-        `;
-    }
-
-    els.quizFeedback.classList.remove("hidden");
-
-    setTimeout(async () => {
-        state.quizIndex += 1;
-
-        if (state.quizIndex >= state.flashcards.length) {
-            state.quizActive = false;
-
-            await updateProfile({
-                quizzes_taken: (state.profile.quizzes_taken || 0) + 1,
-                trophies: (state.profile.trophies || 0) + 1,
-                xp: (state.profile.xp || 0) + state.quizScore * 10
-            });
-
-            await addActivity(`Completed quiz: ${state.quizScore}/${state.flashcards.length}`);
-
-            await loadUserData();
-            render();
-
-            toast(`Quiz complete. Score: ${state.quizScore}/${state.flashcards.length}.`);
-            return;
-        }
-
-        renderQuiz();
-    }, 1200);
-}
-
-async function completeStudySession() {
-    await updateProfile({
-        streak: Math.max(state.profile.streak || 0, 1),
-        study_hours: Number(state.profile.study_hours || 0) + 0.5,
-        trophies: (state.profile.trophies || 0) + 1,
-        xp: (state.profile.xp || 0) + 40
-    });
-
-    await addActivity("Completed a study session");
-    await loadUserData();
-    render();
-
-    toast("+40 XP and +1 trophy.");
+  await addActivity(Generated notes from ${fileName} and earned +35 XP);
+  await unlock("first_note", "First Steps", "Created your first note", "🏆");
 }
 
 async function openPack() {
-    if ((state.profile.trophies || 0) < 1) {
-        toast("You need 1 trophy to open a pack.");
-        return;
-    }
+  const p = state.profile;
+  if (!p || (p.starter_packs || 0) < 1) return toast("No starter packs available.");
 
-    const rewards = [
-        { name: "+25 XP", data: { xp: (state.profile.xp || 0) + 25 } },
-        { name: "+1 AI Credit", data: { ai_credits: (state.profile.ai_credits || 0) + 1 } },
-        { name: "+0.2 Study Hours", data: { study_hours: Number(state.profile.study_hours || 0) + 0.2 } }
-    ];
+  const rewards = [
+    { label: "+75 XP", payload: { xp: (p.xp || 0) + 75 } },
+    { label: "+2 Trophies", payload: { trophies: (p.trophies || 0) + 2 } },
+    { label: "+3 AI Credits", payload: { ai_credits: (p.ai_credits || 0) + 3 } },
+    { label: "Cosmetic Theme Token", payload: { trophies: (p.trophies || 0) + 1 } }
+  ];
 
-    const reward = rewards[Math.floor(Math.random() * rewards.length)];
+  const reward = rewards[Math.floor(Math.random() * rewards.length)];
 
-    await updateProfile({
-        trophies: (state.profile.trophies || 0) - 1,
-        ...reward.data
-    });
+  const { error } = await supabaseClient.from("profiles").update({
+    starter_packs: (p.starter_packs || 0) - 1,
+    ...reward.payload
+  }).eq("id", state.user.id);
 
-    await addActivity(`Opened pack and won ${reward.name}`);
-    await loadUserData();
-    render();
+  if (error) return toast(error.message);
 
-    toast(`Pack opened: ${reward.name}`);
+  await addActivity(Opened Starter Pack and won ${reward.label});
+  await unlock("pack_opener", "Pack Opener", "Opened your first starter pack", "🎁");
+
+  toast(You won ${reward.label});
+  await loadData();
+  render();
 }
 
-async function saveSettings() {
-    const displayName = els.settingsName.value.trim();
+async function makeCards() {
+  const note = state.activeNote;
+  const cards = note?.flashcards || note?.content?.flashcards || [];
 
-    if (!displayName) {
-        toast("Name cannot be empty.");
-        return;
-    }
+  if (!cards.length) return toast("No flashcards found in this note.");
 
-    await updateProfile({
-        display_name: displayName
-    });
+  const rows = cards.map(c => ({
+    user_id: state.user.id,
+    note_id: note.id,
+    question: c.question,
+    answer: c.answer,
+    due_at: new Date().toISOString()
+  }));
 
-    await addActivity("Updated profile settings");
-    await loadUserData();
-    render();
+  const { error } = await supabaseClient.from("flashcards").insert(rows);
+  if (error) return toast(error.message);
 
-    toast("Settings saved.");
+  await addActivity(Created ${rows.length} flashcards);
+  toast("Flashcards created.");
+  await loadData();
+  render();
+  goToPage("flashcards");
 }
 
-async function updateProfile(values) {
-    const { error } = await supabaseClient
-        .from("profiles")
-        .update(values)
-        .eq("id", state.user.id);
+async function review(score) {
+  const card = state.currentCard;
+  if (!card) return;
 
-    if (error) {
-        toast(error.message);
-    }
+  let interval = card.interval_days || 1;
+  let ease = Number(card.ease || 2.5);
+  let reps = card.repetitions || 0;
+
+  if (score === "again") {
+    interval = 1;
+    ease = Math.max(1.3, ease - 0.25);
+    reps = 0;
+  }
+
+  if (score === "good") {
+    reps += 1;
+    interval = Math.ceil(interval * ease);
+  }
+
+  if (score === "easy") {
+    reps += 1;
+    ease += 0.15;
+    interval = Math.ceil(interval * ease * 1.4);
+  }
+
+  const due = new Date();
+  due.setDate(due.getDate() + interval);
+
+  await supabaseClient.from("flashcards").update({
+    interval_days: interval,
+    ease,
+    repetitions: reps,
+    due_at: due.toISOString()
+  }).eq("id", card.id);
+
+  await supabaseClient.from("profiles").update({
+    xp: (state.profile.xp || 0) + 5,
+    cards_reviewed: (state.profile.cards_reviewed || 0) + 1
+  }).eq("id", state.user.id);
+
+  await addActivity("Reviewed a flashcard and earned +5 XP");
+
+  if ((state.profile.cards_reviewed || 0) + 1 >= 20) {
+    await unlock("card_brain", "Card Brain", "Reviewed 20 flashcards", "🧠");
+  }
+
+  await loadData();
+  render();
 }
 
-async function addActivity(title) {
-    await supabaseClient
-        .from("activities")
-        .insert({
-            user_id: state.user.id,
-            title
-        });
+async function saveManualNote() {
+  const title = $("editorTitle").value.trim() || "Manual Note";
+  const text = $("editor").innerText.trim();
+
+  if (!text) return toast("Write something first.");
+
+  const content = {
+    title,
+    summary: text,
+    key_points: text.split("\n").filter(Boolean).slice(0, 10),
+    flashcards: []
+  };
+
+  const { error } = await supabaseClient.from("notes").insert({
+    user_id: state.user.id,
+    title,
+    content
+  });
+
+  if (error) return toast(error.message);
+
+  await addActivity(Saved note: ${title});
+  toast("Note saved.");
+  await loadData();
+  render();
 }
 
-function escapeHTML(value) {
-    return String(value ?? "")
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
+async function toggleTheme() {
+  const next = state.profile.theme === "light" ? "dark" : "light";
+
+  const { error } = await supabaseClient
+    .from("profiles")
+    .update({ theme: next })
+    .eq("id", state.user.id);
+
+  if (error) return toast(error.message);
+
+  state.profile.theme = next;
+  renderProfile();
+}
+
+async function loadLeaderboard() {
+  const { data, error } = await supabaseClient
+    .from("profiles")
+    .select("display_name,xp,level,trophies,streak")
+    .order("xp", { ascending: false })
+    .limit(10);
+
+  if (error) {
+    $("leaderboard").innerHTML = <div class="item">${safe(error.message)}</div>;
+    return;
+  }
+
+  $("leaderboard").innerHTML = data.map((p, i) => `
+    <div class="item">
+      <div>
+        <b>#${i + 1} ${safe(p.display_name || "Student")}</b>
+        <span>Level ${p.level || 1} · 🏆 ${p.trophies || 0} · 🔥 ${p.streak || 0}</span>
+      </div>
+      <b>${p.xp || 0} XP</b>
+    </div>
+  `).join("");
+}
+
+function goToPage(page) {
+  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+  document.querySelectorAll(".nav").forEach(n => n.classList.remove("active"));
+
+  const pageEl = $(${page}Page);
+  if (pageEl) pageEl.classList.add("active");
+
+  document.querySelectorAll([data-page="${page}"]).forEach(b => b.classList.add("active"));
+
+  if (page === "leaderboard") loadLeaderboard();
+}
+
+function bindEvents() {
+  $("loginTab").onclick = () => switchAuth("login");
+  $("signupTab").onclick = () => switchAuth("signup");
+
+  $("loginForm").onsubmit = login;
+  $("signupForm").onsubmit = signUp;
+
+  $("logoutBtn").onclick = logout;
+  $("logoutBtn2").onclick = logout;
+
+  $("themeBtn").onclick = toggleTheme;
+  $("themeBtn2").onclick = toggleTheme;
+
+  $("fileInput").onchange = e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    state.selectedFile = file;
+    $("fileName").textContent = file.name;
+  };
+
+  $("generateBtn").onclick = generateNotes;
+  $("openPackBtn").onclick = openPack;
+  $("openPackBtn2").onclick = openPack;
+  $("makeCardsBtn").onclick = makeCards;
+
+  $("againBtn").onclick = () => review("again");
+  $("goodBtn").onclick = () => review("good");
+  $("easyBtn").onclick = () => review("easy");
+
+  $("saveNoteBtn").onclick = saveManualNote;
+
+  document.querySelectorAll("[data-page]").forEach(btn => {
+    btn.onclick = () => goToPage(btn.dataset.page);
+  });
+}
+
+async function init() {
+  bindEvents();
+
+  const { data } = await supabaseClient.auth.getSession();
+
+  if (data.session?.user) {
+    state.user = data.session.user;
+    await enterApp();
+  } else {
+    $("authScreen").classList.remove("hidden");
+  }
 }
 
 init();
